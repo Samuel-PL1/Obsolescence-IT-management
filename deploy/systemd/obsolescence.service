@@ -7,10 +7,11 @@ Type=simple
 User=obsolescence
 Group=obsolescence
 WorkingDirectory=/opt/obsolescence
+Environment="GUNICORN_BIND=unix:/run/obsolescence/app.sock"
 EnvironmentFile=/opt/obsolescence/.env
 ExecStart=/opt/obsolescence/venv/bin/gunicorn \
     --workers 3 \
-    --bind unix:/run/obsolescence/app.sock \
+    --bind ${GUNICORN_BIND} \
     --access-logfile /var/log/obsolescence/access.log \
     --error-logfile /var/log/obsolescence/error.log \
     wsgi:app

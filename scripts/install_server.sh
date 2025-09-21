@@ -9,6 +9,7 @@ ENV_FILE=${ENV_FILE:-$APP_HOME/.env}
 REQUIREMENTS_FILE=${REQUIREMENTS_FILE:-$APP_HOME/requirements.txt}
 PYTHON_BIN=${PYTHON_BIN:-python3}
 LOG_DIR=${LOG_DIR:-/var/log/obsolescence}
+GUNICORN_BIND=${GUNICORN_BIND:-unix:/run/obsolescence/app.sock}
 
 umask 027
 
@@ -101,6 +102,7 @@ PY
 
     append_env_value "FLASK_ENV" "production"
     append_env_value "DATABASE_PATH" "${APP_HOME}/src/database/app.db"
+    append_env_value "GUNICORN_BIND" "${GUNICORN_BIND}"
 
     chown "${APP_USER}:${APP_GROUP}" "${ENV_FILE}"
 }
@@ -114,6 +116,8 @@ Répertoire de l'application : ${APP_HOME}
 Environnement virtuel : ${VENV_DIR}
 Fichier d'environnement : ${ENV_FILE}
 Logs applicatifs : ${LOG_DIR}/(access.log|error.log)
+
+Gunicorn écoute sur : ${GUNICORN_BIND:-unix:/run/obsolescence/app.sock}
 
 Pensez à :
   - Déployer le service systemd (voir README-deploiement.md).

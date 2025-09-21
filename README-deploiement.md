@@ -44,6 +44,7 @@ Le fichier `.env` généré peut être ajusté selon vos besoins. Variables prin
 - `SECRET_KEY` : clé secrète Flask (générée automatiquement, à conserver secrète) ;
 - `FLASK_ENV` : laisser `production` en environnement serveur ;
 - `DATABASE_PATH` : chemin du fichier SQLite. Exemple par défaut : `/opt/obsolescence/src/database/app.db`.
+- `GUNICORN_BIND` : adresse d'écoute de Gunicorn (`unix:/run/obsolescence/app.sock` par défaut). Sur Plesk, utilisez plutôt une socket TCP interne (`127.0.0.1:8050` par exemple) pour la mettre derrière le proxy web natif.
 
 Ajoutez vos propres variables si nécessaire (ex. paramètres SMTP, URL externes…).
 
@@ -108,3 +109,56 @@ Cette configuration effectue une rotation hebdomadaire, conserve 12 archives et 
 - Tester l'API via `curl --unix-socket /run/obsolescence/app.sock http://localhost/api/health` (adapter au point de terminaison disponible).
 
 Pour toute personnalisation (nombre de workers Gunicorn, logs JSON, base externe…), modifiez l'unité `systemd` et/ou le fichier `.env` en conséquence.
+
+## 8. Intégration à Odin/Plesk
+
+Plesk (anciennement Odin) fournit un proxy Apache/Nginx devant vos applications. Pour intégrer l'API :
+
+1. **Choisissez le bon utilisateur** : chaque abonnement Plesk possède un utilisateur système (ex. `example`). Passez son nom au
+   script d'installation pour éviter de créer un compte supplémentaire :
+
+   ```bash
+   sudo APP_USER=example APP_GROUP=psacln APP_HOME=/var/www/vhosts/example.com/obsolescence \
+        ./scripts/install_server.sh
+   ```
+
+   Cela installe l'application dans l'espace du domaine tout en conservant les permissions attendues par Plesk. Pensez à
+   ajuster `WorkingDirectory`, `EnvironmentFile` et `ExecStart` dans l'unité `systemd` pour refléter ce chemin personnalisé.
+
+2. **Exposez Gunicorn en TCP** : modifiez le fichier `.env` pour définir `GUNICORN_BIND=127.0.0.1:8050`, puis rechargez le service
+   (`sudo systemctl restart obsolescence.service`). Le port reste privé car seul Apache/Nginx y accède.
+
+3. **Ajoutez les directives proxy** : dans Plesk, ouvrez **Sites web & Domaines → Paramètres Apache & nginx** du domaine concerné
+   puis ajoutez :
+
+   - *Directives Apache supplémentaires* :
+
+     ```apache
+     ProxyPreserveHost On
+     ProxyPass / http://127.0.0.1:8050/
+     ProxyPassReverse / http://127.0.0.1:8050/
+     ```
+
+   - *Directives nginx supplémentaires* (mode proxy activé) :
+
+     ```nginx
+     location / {
+         proxy_pass http://127.0.0.1:8050/;
+         proxy_set_header Host $host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto $scheme;
+     }
+     ```
+
+   Validez puis redémarrez le domaine. Plesk se charge de recharger Apache/Nginx.
+
+4. **Sécurité & supervision** : Plesk autorise également la création d'une tâche planifiée pour redémarrer le service ou exécuter
+   `flask --app src.main upgrade-db`. Utilisez `journalctl -u obsolescence.service` ou l'onglet **Journaux** de Plesk pour
+   consulter l'activité.
+
+5. **Certificat TLS** : gérez le certificat Let’s Encrypt depuis Plesk ; Apache/Nginx terminent le TLS avant de proxyfier vers
+   Gunicorn.
+
+Ces étapes permettent d'exploiter l'application au sein d'un environnement Plesk standard tout en conservant la gestion via
+`systemd` et le script d'installation fourni.
