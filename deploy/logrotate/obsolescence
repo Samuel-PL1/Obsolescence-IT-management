@@ -1,0 +1,12 @@
+/var/log/obsolescence/*.log {
+    weekly
+    rotate 12
+    compress
+    missingok
+    notifempty
+    create 0640 obsolescence obsolescence
+    sharedscripts
+    postrotate
+        systemctl kill -s HUP obsolescence.service >/dev/null 2>&1 || true
+    endscript
+}
