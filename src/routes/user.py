@@ -37,3 +37,23 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     return '', 204
+
+
+
+@user_bp.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Nom d'utilisateur et mot de passe requis"}), 400
+
+    user = User.query.filter_by(username=username).first()
+
+    if user and user.check_password(password):
+        # Pour une application réelle, vous utiliseriez des sessions ou des tokens JWT
+        return jsonify({"message": "Connexion réussie", "user": user.to_dict()})
+    else:
+        return jsonify({"error": "Nom d'utilisateur ou mot de passe incorrect"}), 401
+
