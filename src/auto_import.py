@@ -4,7 +4,7 @@ Script d'importation automatique des données Excel au démarrage
 """
 import os
 from models.equipment import Equipment, Application, db
-from excel_reader import read_excel_file, is_empty_value, convert_boolean_field, clean_string_field
+from src.excel_reader import read_excel_file, is_empty_value, convert_boolean_field, clean_string_field
 
 def auto_import_excel_data():
     """Importe automatiquement les données Excel en remplaçant les données existantes"""

@@ -227,7 +227,7 @@ def import_equipment():
             return jsonify({'error': 'Format de fichier non supporté. Utilisez .xlsx ou .xls'}), 400
         
         # Lire le fichier Excel avec notre module personnalisé
-        from excel_reader import read_excel_file
+        from src.excel_reader import read_excel_file
         
         try:
             # Lire le fichier Excel en mémoire
@@ -253,7 +253,7 @@ def import_equipment():
         errors = []
         
         # Importer les fonctions utilitaires
-        from excel_reader import is_empty_value, convert_boolean_field, clean_string_field
+        from src.excel_reader import is_empty_value, convert_boolean_field, clean_string_field
         
         for index, row in enumerate(data_rows):
             try:
