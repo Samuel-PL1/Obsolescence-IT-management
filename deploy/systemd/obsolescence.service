@@ -1,0 +1,24 @@
+[Unit]
+Description=Obsolescence IT Management API
+After=network.target
+
+[Service]
+Type=simple
+User=obsolescence
+Group=obsolescence
+WorkingDirectory=/opt/obsolescence
+Environment="GUNICORN_BIND=unix:/run/obsolescence/app.sock"
+EnvironmentFile=/opt/obsolescence/.env
+ExecStart=/opt/obsolescence/venv/bin/gunicorn \
+    --workers 3 \
+    --bind ${GUNICORN_BIND} \
+    --access-logfile /var/log/obsolescence/access.log \
+    --error-logfile /var/log/obsolescence/error.log \
+    wsgi:app
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=obsolescence
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
