@@ -19,8 +19,15 @@ def check_obsolescence():
             return jsonify({'error': 'Le nom du produit est requis'}), 400
         
         # Recherche dans l'API endoflife.date
-        obsolescence_data = fetch_obsolescence_data(product_name)
-        
+        obsolescence_data, error = fetch_obsolescence_data(product_name)
+
+        if error:
+            status_code = error.get('status_code', 500)
+            response_body = {'error': error.get('message', 'Erreur inconnue')}
+            if error.get('details'):
+                response_body['details'] = error['details']
+            return jsonify(response_body), status_code
+
         if obsolescence_data:
             # Sauvegarde ou mise à jour des informations d'obsolescence
             save_obsolescence_info(product_name, product_type, obsolescence_data)
@@ -43,10 +50,12 @@ def update_all_obsolescence():
         
         for (os_name,) in os_list:
             try:
-                obsolescence_data = fetch_obsolescence_data(os_name.lower())
+                obsolescence_data, error = fetch_obsolescence_data(os_name.lower())
                 if obsolescence_data:
                     save_obsolescence_info(os_name, 'os', obsolescence_data)
                     updated_count += 1
+                elif error:
+                    errors.append(f"Erreur pour {os_name}: {error.get('message', 'Erreur inconnue')}")
             except Exception as e:
                 errors.append(f"Erreur pour {os_name}: {str(e)}")
         
@@ -55,10 +64,12 @@ def update_all_obsolescence():
         
         for (app_name,) in app_list:
             try:
-                obsolescence_data = fetch_obsolescence_data(app_name.lower())
+                obsolescence_data, error = fetch_obsolescence_data(app_name.lower())
                 if obsolescence_data:
                     save_obsolescence_info(app_name, 'application', obsolescence_data)
                     updated_count += 1
+                elif error:
+                    errors.append(f"Erreur pour {app_name}: {error.get('message', 'Erreur inconnue')}")
             except Exception as e:
                 errors.append(f"Erreur pour {app_name}: {str(e)}")
         
@@ -128,11 +139,11 @@ def fetch_obsolescence_data(product_name):
     try:
         # Normaliser le nom du produit pour l'API
         normalized_name = normalize_product_name(product_name)
-        
+
         # Appel à l'API endoflife.date
         url = f"https://endoflife.date/api/v1/products/{normalized_name}"
         response = requests.get(url, timeout=10)
-        
+
         if response.status_code == 200:
             data = response.json()
             
@@ -172,16 +183,44 @@ def fetch_obsolescence_data(product_name):
                     'support_end_date': support_end_date.isoformat() if support_end_date else None,
                     'is_obsolete': is_obsolete,
                     'raw_data': latest_release
-                }
-        
-        return None
-    
+                }, None
+
+        if response.status_code == 404:
+            return None, {
+                'status_code': 404,
+                'message': 'Produit non trouvé sur endoflife.date'
+            }
+
+        if response.status_code >= 400:
+            return None, {
+                'status_code': response.status_code,
+                'message': "Erreur lors de la récupération des données d'obsolescence",
+                'details': response.text
+            }
+
+        return None, None
+
+    except (requests.Timeout, requests.ConnectionError) as e:
+        print(f"Erreur lors de l'appel à l'API (réseau): {e}")
+        return None, {
+            'status_code': 502,
+            'message': "Erreur réseau lors de la récupération des données d'obsolescence",
+            'details': str(e)
+        }
     except requests.RequestException as e:
         print(f"Erreur lors de l'appel à l'API: {e}")
-        return None
+        return None, {
+            'status_code': 500,
+            'message': "Erreur lors de l'appel à l'API endoflife.date",
+            'details': str(e)
+        }
     except Exception as e:
         print(f"Erreur lors du traitement des données: {e}")
-        return None
+        return None, {
+            'status_code': 500,
+            'message': 'Erreur lors du traitement des données',
+            'details': str(e)
+        }
 
 def normalize_product_name(product_name):
     """Normalise le nom du produit pour l'API endoflife.date"""
