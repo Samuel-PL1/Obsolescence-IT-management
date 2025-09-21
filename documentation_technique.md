@@ -44,6 +44,13 @@ Le Gestionnaire d'Obsolescence IT est une application web complète développée
 - acquisition_date: Date - Date d'acquisition
 - warranty_end_date: Date - Fin de garantie
 - status: String(20) - Statut (Active, Obsolete, In Stock)
+- description_alias: String(200) - Description (Alias)
+- brand: String(100) - Marque
+- model_number: String(100) - N° modèle
+- network_connected: Boolean - Connecté au réseau O/N
+- rls_network_saved: Boolean - Sauvegardé sur réseau RLS O/N
+- to_be_backed_up: Boolean - A sauvegarder O/N
+- supplier: String(100) - Fournisseur matériel
 - created_at: DateTime - Date de création
 - updated_at: DateTime - Dernière modification
 ```
@@ -403,11 +410,17 @@ Basé sur les spécifications fournies, les colonnes supportées sont :
 - `Nom PC` : Nom unique de l'équipement
 
 **Colonnes Optionnelles :**
-- `Description (Alias)` : Description de l'équipement
+- `Description  (Alias)` : Description ou alias de l'équipement
+- `Marque` : Marque du fabricant
+- `N° modèle` : Numéro de modèle
 - `Système d'exploitation PC` : OS installé
 - `Application` : Application principale installée
 - `Version` : Version de l'application
-- `Fournisseur matériel` : Fabricant de l'équipement
+- `Connecté au réseau O/N` : Connexion réseau (O/N)
+- `Sauvegardé sur réseau RLS O/N` : Sauvegarde RLS (O/N)
+- `Adresse IP` : Adresse IP de l'équipement
+- `A sauvegarder O/N` : Nécessite sauvegarde (O/N)
+- `Fournisseur matériel` : Nom du fournisseur
 
 #### Détection Automatique du Type
 Le type d'équipement est déterminé automatiquement selon le nom :

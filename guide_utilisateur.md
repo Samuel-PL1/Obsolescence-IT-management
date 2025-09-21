@@ -387,11 +387,17 @@ Votre fichier Excel doit contenir les colonnes suivantes :
 - **Nom PC** : Nom unique de l'équipement (ex: "PC-001", "SRV-001")
 
 **Colonnes Optionnelles :**
-- **Description (Alias)** : Description de l'équipement
-- **Système d'exploitation PC** : OS installé (ex: "Windows 10 Pro", "Ubuntu 20.04")
-- **Application** : Application principale (ex: "Microsoft Office", "MySQL")
-- **Version** : Version de l'application (ex: "2019", "8.0")
-- **Fournisseur matériel** : Fabricant (ex: "Dell", "HP")
+- **Description  (Alias)** : Description ou alias de l'équipement
+- **Marque** : Marque du fabricant
+- **N° modèle** : Numéro de modèle
+- **Système d'exploitation PC** : OS installé
+- **Application** : Application principale installée
+- **Version** : Version de l'application
+- **Connecté au réseau O/N** : Connexion réseau (O/N)
+- **Sauvegardé sur réseau RLS O/N** : Sauvegarde RLS (O/N)
+- **Adresse IP** : Adresse IP de l'équipement
+- **A sauvegarder O/N** : Nécessite sauvegarde (O/N)
+- **Fournisseur matériel** : Nom du fournisseur
 
 #### Processus d'Import
 

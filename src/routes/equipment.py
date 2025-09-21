@@ -236,17 +236,6 @@ def import_equipment():
         except Exception as e:
             return jsonify({'error': f'Erreur lors de la lecture du fichier Excel: {str(e)}'}), 400
         
-        # Mapping des colonnes selon l'image fournie
-        column_mapping = {
-            'Salle': 'location',
-            'Description (Alias)': 'name', 
-            'Nom PC': 'name',
-            'Système d\'exploitation PC': 'os_name',
-            'Application': 'application_name',
-            'Version': 'application_version',
-            'Fournisseur matériel': 'manufacturer'
-        }
-        
         # Normaliser les noms de colonnes
         df.columns = df.columns.str.strip()
         
@@ -294,12 +283,27 @@ def import_equipment():
                     errors.append(f'Ligne {index + 2}: Équipement {equipment_name} existe déjà')
                     continue
                 
-                # Créer l'équipement
+                # Fonction utilitaire pour convertir O/N en booléen
+                def convert_yes_no_to_bool(value):
+                    if pd.isna(value) or str(value).strip() == '':
+                        return None
+                    value_str = str(value).strip().upper()
+                    return value_str in ['O', 'OUI', 'Y', 'YES', '1', 'TRUE']
+                
+                # Créer l'équipement avec tous les nouveaux champs
                 equipment = Equipment(
                     name=equipment_name,
                     equipment_type=equipment_type,
                     location=location,
+                    description_alias=str(row.get('Description  (Alias)', '')).strip() or None,
+                    brand=str(row.get('Marque', '')).strip() or None,
+                    model_number=str(row.get('N° modèle', '')).strip() or None,
                     os_name=str(row.get('Système d\'exploitation PC', '')).strip() or None,
+                    ip_address=str(row.get('Adresse IP', '')).strip() or None,
+                    network_connected=convert_yes_no_to_bool(row.get('Connecté au réseau O/N')),
+                    rls_network_saved=convert_yes_no_to_bool(row.get('Sauvegardé sur réseau RLS O/N')),
+                    to_be_backed_up=convert_yes_no_to_bool(row.get('A sauvegarder O/N')),
+                    supplier=str(row.get('Fournisseur matériel', '')).strip() or None,
                     status='Active'
                 )
                 
@@ -350,15 +354,21 @@ def export_template():
         import io
         from flask import send_file
         
-        # Créer un DataFrame avec les colonnes attendues
+        # Créer un DataFrame avec les colonnes attendues selon le fichier Excel fourni
         template_data = {
-            'Salle': ['Siège Paris - Bureau 101', 'Agence Lyon - Salle 205'],
-            'Description (Alias)': ['Poste de travail principal', 'Serveur de base de données'],
-            'Nom PC': ['PC-001', 'SRV-001'],
-            'Système d\'exploitation PC': ['Windows 10 Pro', 'Ubuntu 20.04 LTS'],
-            'Application': ['Microsoft Office', 'MySQL'],
-            'Version': ['2019', '8.0'],
-            'Fournisseur matériel': ['Dell', 'HP']
+            'Salle': ['PDB-Chromato', 'PDB-GAZ', 'PDB-Spectro'],
+            'Description  (Alias)': ['Poste de travail principal', 'Serveur de base de données', 'Machine d\'analyse'],
+            'Marque': ['Dell', 'HP', 'Agilent'],
+            'Nom PC': ['PC-CHROMATO-01', 'SRV-GAZ-01', 'LAB-SPECTRO-01'],
+            'N° modèle': ['OptiPlex 7090', 'ProLiant DL380', 'Model 1260'],
+            'Système d\'exploitation PC': ['Windows 10 Pro', 'Ubuntu 20.04 LTS', 'Windows 7 Pro'],
+            'Application': ['ChemStation', 'MySQL', 'OpenLAB CDS'],
+            'Version': ['C.01.10', '8.0', '2.7'],
+            'Connecté au réseau O/N': ['O', 'O', 'N'],
+            'Sauvegardé sur réseau RLS O/N': ['O', 'O', 'N'],
+            'Adresse IP': ['192.168.1.10', '192.168.1.20', ''],
+            'A sauvegarder O/N': ['O', 'O', 'N'],
+            'Fournisseur matériel': ['Dell Technologies', 'HP Inc.', 'Agilent Technologies']
         }
         
         df = pd.DataFrame(template_data)
@@ -372,10 +382,25 @@ def export_template():
             instructions = pd.DataFrame({
                 'Instructions d\'import': [
                     '1. Remplissez les colonnes selon vos données',
-                    '2. Salle et Nom PC sont obligatoires',
-                    '3. Le type d\'équipement est déterminé automatiquement',
-                    '4. Les noms doivent être uniques',
-                    '5. Formats supportés: .xlsx, .xls'
+                    '2. Colonnes obligatoires: Salle, Nom PC',
+                    '3. Le type d\'équipement est déterminé automatiquement selon le nom',
+                    '4. Les noms d\'équipements doivent être uniques',
+                    '5. Pour les colonnes O/N: utilisez O (Oui) ou N (Non)',
+                    '6. Formats supportés: .xlsx, .xls',
+                    '7. Colonnes disponibles:',
+                    '   - Salle (obligatoire): Localisation de l\'équipement',
+                    '   - Description (Alias): Description ou alias de l\'équipement',
+                    '   - Marque: Marque du fabricant',
+                    '   - Nom PC (obligatoire): Nom unique de l\'équipement',
+                    '   - N° modèle: Numéro de modèle',
+                    '   - Système d\'exploitation PC: OS installé',
+                    '   - Application: Application principale installée',
+                    '   - Version: Version de l\'application',
+                    '   - Connecté au réseau O/N: Connexion réseau (O/N)',
+                    '   - Sauvegardé sur réseau RLS O/N: Sauvegarde RLS (O/N)',
+                    '   - Adresse IP: Adresse IP de l\'équipement',
+                    '   - A sauvegarder O/N: Nécessite sauvegarde (O/N)',
+                    '   - Fournisseur matériel: Nom du fournisseur'
                 ]
             })
             instructions.to_excel(writer, sheet_name='Instructions', index=False)

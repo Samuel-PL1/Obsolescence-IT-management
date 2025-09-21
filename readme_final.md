@@ -53,11 +53,17 @@ Basé sur vos spécifications, les colonnes supportées sont :
 - `Nom PC` : Nom unique de l'équipement
 
 **Colonnes Optionnelles :**
-- `Description (Alias)` : Description de l'équipement
+- `Description  (Alias)` : Description ou alias de l'équipement
+- `Marque` : Marque du fabricant
+- `N° modèle` : Numéro de modèle
 - `Système d'exploitation PC` : OS installé
-- `Application` : Application principale
+- `Application` : Application principale installée
 - `Version` : Version de l'application
-- `Fournisseur matériel` : Fabricant
+- `Connecté au réseau O/N` : Connexion réseau (O/N)
+- `Sauvegardé sur réseau RLS O/N` : Sauvegarde RLS (O/N)
+- `Adresse IP` : Adresse IP de l'équipement
+- `A sauvegarder O/N` : Nécessite sauvegarde (O/N)
+- `Fournisseur matériel` : Nom du fournisseur
 
 ## 🔧 Architecture Technique
 

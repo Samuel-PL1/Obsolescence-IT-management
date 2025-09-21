@@ -13,6 +13,16 @@ class Equipment(db.Model):
     acquisition_date = db.Column(db.Date, nullable=True)
     warranty_end_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), default='Active')  # Active, Obsolete, In Stock, etc.
+    
+    # Nouveaux champs ajoutés pour correspondre au fichier Excel
+    description_alias = db.Column(db.String(200), nullable=True)  # Description (Alias)
+    brand = db.Column(db.String(100), nullable=True)  # Marque
+    model_number = db.Column(db.String(100), nullable=True)  # N° modèle
+    network_connected = db.Column(db.Boolean, nullable=True)  # Connecté au réseau O/N
+    rls_network_saved = db.Column(db.Boolean, nullable=True)  # Sauvegardé sur réseau RLS O/N
+    to_be_backed_up = db.Column(db.Boolean, nullable=True)  # A sauvegarder O/N
+    supplier = db.Column(db.String(100), nullable=True)  # Fournisseur matériel
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -34,6 +44,13 @@ class Equipment(db.Model):
             'acquisition_date': self.acquisition_date.isoformat() if self.acquisition_date else None,
             'warranty_end_date': self.warranty_end_date.isoformat() if self.warranty_end_date else None,
             'status': self.status,
+            'description_alias': self.description_alias,
+            'brand': self.brand,
+            'model_number': self.model_number,
+            'network_connected': self.network_connected,
+            'rls_network_saved': self.rls_network_saved,
+            'to_be_backed_up': self.to_be_backed_up,
+            'supplier': self.supplier,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'applications': [app.to_dict() for app in self.applications]
