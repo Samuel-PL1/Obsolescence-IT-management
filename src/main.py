@@ -25,7 +25,15 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirnam
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 with app.app_context():
-    db.create_all()
+    # Créer les tables seulement si elles n'existent pas déjà
+    db_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
+    if not os.path.exists(db_path):
+        # Créer le répertoire database s'il n'existe pas
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        db.create_all()
+        print("Base de données créée")
+    else:
+        print("Base de données existante trouvée, conservation des données")
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
