@@ -32,6 +32,13 @@ with app.app_context():
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         db.create_all()
         print("Base de données créée")
+        
+        # Import automatique des données Excel
+        try:
+            from auto_import import auto_import_excel_data
+            auto_import_excel_data()
+        except Exception as e:
+            print(f"Erreur lors de l'import automatique: {e}")
     else:
         print("Base de données existante trouvée, conservation des données")
 
