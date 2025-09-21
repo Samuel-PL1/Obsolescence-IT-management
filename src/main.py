@@ -40,7 +40,13 @@ with app.app_context():
         except Exception as e:
             print(f"Erreur lors de l'import automatique: {e}")
     else:
-        print("Base de données existante trouvée, conservation des données")
+        print("Base de données existante trouvée")
+        # Forcer l'import des vraies données même si la base existe
+        try:
+            from auto_import import auto_import_excel_data
+            auto_import_excel_data()
+        except Exception as e:
+            print(f"Erreur lors de l'import automatique: {e}")
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

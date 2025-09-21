@@ -7,13 +7,19 @@ import pandas as pd
 from models.equipment import Equipment, Application, db
 
 def auto_import_excel_data():
-    """Importe automatiquement les données Excel si la base est vide"""
+    """Importe automatiquement les données Excel en remplaçant les données existantes"""
     
-    # Vérifier si des équipements existent déjà
-    existing_count = Equipment.query.count()
-    if existing_count > 0:
-        print(f"Base de données déjà peuplée avec {existing_count} équipements")
-        return
+    # Supprimer toutes les données existantes pour forcer l'import des vraies données
+    try:
+        # Supprimer les applications d'abord (clé étrangère)
+        Application.query.delete()
+        # Supprimer les équipements
+        Equipment.query.delete()
+        db.session.commit()
+        print("Données existantes supprimées")
+    except Exception as e:
+        print(f"Erreur lors de la suppression: {e}")
+        db.session.rollback()
     
     # Chemin vers le fichier Excel
     excel_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'inventaireITLabPDB.xlsx')
