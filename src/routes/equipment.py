@@ -226,42 +226,46 @@ def import_equipment():
         if not file.filename.lower().endswith(('.xlsx', '.xls')):
             return jsonify({'error': 'Format de fichier non supporté. Utilisez .xlsx ou .xls'}), 400
         
-        # Lire le fichier Excel
-        import pandas as pd
-        import io
+        # Lire le fichier Excel avec notre module personnalisé
+        from excel_reader import read_excel_file
         
         try:
             # Lire le fichier Excel en mémoire
-            df = pd.read_excel(io.BytesIO(file.read()))
+            excel_data = read_excel_file(file.read())
+            columns = excel_data['columns']
+            data_rows = excel_data['data']
         except Exception as e:
             return jsonify({'error': f'Erreur lors de la lecture du fichier Excel: {str(e)}'}), 400
         
         # Normaliser les noms de colonnes
-        df.columns = df.columns.str.strip()
+        columns = [col.strip() for col in columns]
         
         # Vérifier les colonnes requises
         required_columns = ['Salle', 'Nom PC']
-        missing_columns = [col for col in required_columns if col not in df.columns]
+        missing_columns = [col for col in required_columns if col not in columns]
         if missing_columns:
             return jsonify({
                 'error': f'Colonnes manquantes: {", ".join(missing_columns)}',
-                'available_columns': list(df.columns)
+                'available_columns': columns
             }), 400
         
         imported_count = 0
         errors = []
         
-        for index, row in df.iterrows():
+        # Importer les fonctions utilitaires
+        from excel_reader import is_empty_value, convert_boolean_field, clean_string_field
+        
+        for index, row in enumerate(data_rows):
             try:
                 # Extraire les données de base
-                equipment_name = str(row.get('Nom PC', '')).strip()
-                location = str(row.get('Salle', '')).strip()
+                equipment_name = clean_string_field(row.get('Nom PC', ''))
+                location = clean_string_field(row.get('Salle', ''))
                 
-                if not equipment_name or equipment_name.lower() in ['nan', 'none', '']:
+                if not equipment_name:
                     errors.append(f'Ligne {index + 2}: Nom PC manquant')
                     continue
                 
-                if not location or location.lower() in ['nan', 'none', '']:
+                if not location:
                     errors.append(f'Ligne {index + 2}: Salle manquante')
                     continue
                 
@@ -283,27 +287,20 @@ def import_equipment():
                     errors.append(f'Ligne {index + 2}: Équipement {equipment_name} existe déjà')
                     continue
                 
-                # Fonction utilitaire pour convertir O/N en booléen
-                def convert_yes_no_to_bool(value):
-                    if pd.isna(value) or str(value).strip() == '':
-                        return None
-                    value_str = str(value).strip().upper()
-                    return value_str in ['O', 'OUI', 'Y', 'YES', '1', 'TRUE']
-                
                 # Créer l'équipement avec tous les nouveaux champs
                 equipment = Equipment(
                     name=equipment_name,
                     equipment_type=equipment_type,
                     location=location,
-                    description_alias=str(row.get('Description  (Alias)', '')).strip() or None,
-                    brand=str(row.get('Marque', '')).strip() or None,
-                    model_number=str(row.get('N° modèle', '')).strip() or None,
-                    os_name=str(row.get('Système d\'exploitation PC', '')).strip() or None,
-                    ip_address=str(row.get('Adresse IP', '')).strip() or None,
-                    network_connected=convert_yes_no_to_bool(row.get('Connecté au réseau O/N')),
-                    rls_network_saved=convert_yes_no_to_bool(row.get('Sauvegardé sur réseau RLS O/N')),
-                    to_be_backed_up=convert_yes_no_to_bool(row.get('A sauvegarder O/N')),
-                    supplier=str(row.get('Fournisseur matériel', '')).strip() or None,
+                    description_alias=clean_string_field(row.get('Description  (Alias)', '')),
+                    brand=clean_string_field(row.get('Marque', '')),
+                    model_number=clean_string_field(row.get('N° modèle', '')),
+                    os_name=clean_string_field(row.get('Système d\'exploitation PC', '')),
+                    ip_address=clean_string_field(row.get('Adresse IP', '')),
+                    network_connected=convert_boolean_field(row.get('Connecté au réseau O/N')),
+                    rls_network_saved=convert_boolean_field(row.get('Sauvegardé sur réseau RLS O/N')),
+                    to_be_backed_up=convert_boolean_field(row.get('A sauvegarder O/N')),
+                    supplier=clean_string_field(row.get('Fournisseur matériel', '')),
                     status='Active'
                 )
                 
@@ -311,13 +308,13 @@ def import_equipment():
                 db.session.flush()  # Pour obtenir l'ID
                 
                 # Ajouter l'application si présente
-                app_name = str(row.get('Application', '')).strip()
-                app_version = str(row.get('Version', '')).strip()
+                app_name = clean_string_field(row.get('Application', ''))
+                app_version = clean_string_field(row.get('Version', ''))
                 
-                if app_name and app_name.lower() not in ['nan', 'none', '']:
+                if app_name:
                     application = Application(
                         name=app_name,
-                        version=app_version if app_version.lower() not in ['nan', 'none', ''] else 'Non spécifiée',
+                        version=app_version if app_version else 'Non spécifiée',
                         equipment_id=equipment.id
                     )
                     db.session.add(application)
@@ -337,7 +334,7 @@ def import_equipment():
         return jsonify({
             'message': f'{imported_count} équipements importés avec succès',
             'imported_count': imported_count,
-            'total_rows': len(df),
+            'total_rows': len(data_rows),
             'errors': errors[:10],  # Limiter à 10 erreurs pour l'affichage
             'error_count': len(errors)
         }), 200

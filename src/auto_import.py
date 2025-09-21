@@ -3,8 +3,8 @@
 Script d'importation automatique des données Excel au démarrage
 """
 import os
-import pandas as pd
 from models.equipment import Equipment, Application, db
+from excel_reader import read_excel_file, is_empty_value, convert_boolean_field, clean_string_field
 
 def auto_import_excel_data():
     """Importe automatiquement les données Excel en remplaçant les données existantes"""
@@ -29,9 +29,12 @@ def auto_import_excel_data():
         return
     
     try:
-        # Lire le fichier Excel
-        df = pd.read_excel(excel_file)
-        print(f"Lecture du fichier Excel: {len(df)} lignes trouvées")
+        # Lire le fichier Excel avec notre module personnalisé
+        with open(excel_file, 'rb') as f:
+            excel_data = read_excel_file(f.read())
+        
+        data_rows = excel_data['data']
+        print(f"Lecture du fichier Excel: {len(data_rows)} lignes trouvées")
         
         # Mapping des colonnes
         column_mapping = {
@@ -52,14 +55,14 @@ def auto_import_excel_data():
         
         imported_count = 0
         
-        for index, row in df.iterrows():
+        for index, row in enumerate(data_rows):
             try:
                 # Vérifier les champs obligatoires
-                if pd.isna(row.get('Nom PC')) or pd.isna(row.get('Salle')):
-                    continue
+                name = clean_string_field(row.get('Nom PC'))
+                location = clean_string_field(row.get('Salle'))
                 
-                name = str(row['Nom PC']).strip()
-                location = str(row['Salle']).strip()
+                if not name or not location:
+                    continue
                 
                 # Vérifier si l'équipement existe déjà
                 if Equipment.query.filter_by(name=name).first():
@@ -86,27 +89,26 @@ def auto_import_excel_data():
                 )
                 
                 # Ajouter les champs optionnels
-                for excel_col, db_field in column_mapping.items():
-                    if excel_col in df.columns and not pd.isna(row.get(excel_col)):
-                        value = row[excel_col]
-                        
-                        if db_field in ['network_connected', 'rls_network_saved', 'to_be_backed_up']:
-                            # Conversion O/N vers boolean
-                            if isinstance(value, str):
-                                equipment.__setattr__(db_field, value.upper().startswith('O'))
-                        elif db_field not in ['application_name', 'application_version']:
-                            equipment.__setattr__(db_field, str(value) if not pd.isna(value) else None)
+                equipment.description_alias = clean_string_field(row.get('Description  (Alias)'))
+                equipment.brand = clean_string_field(row.get('Marque'))
+                equipment.model_number = clean_string_field(row.get('N° modèle'))
+                equipment.os_name = clean_string_field(row.get('Système d\'exploitation PC'))
+                equipment.ip_address = clean_string_field(row.get('Adresse IP'))
+                equipment.network_connected = convert_boolean_field(row.get('Connecté au réseau O/N'))
+                equipment.rls_network_saved = convert_boolean_field(row.get('Sauvegardé sur réseau RLS O/N'))
+                equipment.to_be_backed_up = convert_boolean_field(row.get('A sauvegarder O/N'))
+                equipment.supplier = clean_string_field(row.get('Fournisseur matériel'))
                 
                 db.session.add(equipment)
                 db.session.flush()  # Pour obtenir l'ID
                 
                 # Ajouter l'application si présente
-                app_name = row.get('Application')
-                app_version = row.get('Version')
-                if not pd.isna(app_name) and str(app_name).strip():
+                app_name = clean_string_field(row.get('Application'))
+                app_version = clean_string_field(row.get('Version'))
+                if app_name:
                     application = Application(
-                        name=str(app_name).strip(),
-                        version=str(app_version).strip() if not pd.isna(app_version) else None,
+                        name=app_name,
+                        version=app_version if app_version else 'Non spécifiée',
                         equipment_id=equipment.id
                     )
                     db.session.add(application)
