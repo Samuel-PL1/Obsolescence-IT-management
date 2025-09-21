@@ -87,3 +87,37 @@ def test_check_obsolescence_network_failure(client, monkeypatch):
     payload = response.get_json()
     assert payload["error"] == "Erreur réseau lors de la récupération des données d'obsolescence"
     assert "details" in payload
+
+
+def test_check_obsolescence_connection_error(client, monkeypatch):
+    def fake_get(url, timeout):
+        raise requests.ConnectionError("connection dropped")
+
+    monkeypatch.setattr("src.routes.obsolescence.requests.get", fake_get)
+
+    response = client.post(
+        "/api/obsolescence/check", json={"product_name": "Any"}
+    )
+
+    assert response.status_code == 502
+    payload = response.get_json()
+    assert payload["error"] == "Erreur réseau lors de la récupération des données d'obsolescence"
+    assert payload["details"] == "connection dropped"
+
+
+def test_check_obsolescence_remote_error(client, monkeypatch):
+    def fake_get(url, timeout):
+        return DummyResponse(503, text="Service unavailable")
+
+    monkeypatch.setattr("src.routes.obsolescence.requests.get", fake_get)
+
+    response = client.post(
+        "/api/obsolescence/check", json={"product_name": "Any"}
+    )
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload == {
+        "error": "Erreur lors de la récupération des données d'obsolescence",
+        "details": "Service unavailable",
+    }

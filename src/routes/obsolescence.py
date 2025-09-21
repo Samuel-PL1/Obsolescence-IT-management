@@ -3,7 +3,6 @@ import requests
 from src.models.user import db
 from src.models.equipment import Equipment, Application, ObsolescenceInfo
 from datetime import datetime, date
-import json
 
 obsolescence_bp = Blueprint('obsolescence', __name__)
 
