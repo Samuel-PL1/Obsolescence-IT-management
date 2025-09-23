@@ -255,22 +255,44 @@ def import_equipment():
         # Importer les fonctions utilitaires
         from src.excel_reader import is_empty_value, convert_boolean_field, clean_string_field
         
+        # Préparer un utilitaire pour récupérer des valeurs avec variantes d'en-têtes
+        def first_value(row_obj, keys):
+            for k in keys:
+                v = row_obj.get(k, '')
+                v = clean_string_field(v)
+                if v is not None and v != '':
+                    return v
+            return None
+
+        # Variantes d'en-têtes possibles (accents, apostrophes, espaces)
+        header_map = {
+            'name': ['Nom PC', 'Nom Pc', 'Nom pc', 'Nom ordinateur', 'Nom machine'],
+            'location': ['Salle', 'Localisation', 'Emplacement', 'Lieu'],
+            'description_alias': ['Description  (Alias)', 'Description (Alias)', 'Alias', 'Description'],
+            'brand': ['Marque', 'Fabricant'],
+            'model_number': ['N° modèle', 'No modèle', 'N° modele', 'No modele', 'Modèle', 'Modele', 'Référence modèle', 'Reference modele'],
+            'os_name': ["Système d'exploitation PC", 'Système d’exploitation PC', 'Systeme dexploitation PC', 'OS', 'Système', 'Systeme'],
+            'ip_address': ['Adresse IP', 'Adresse Ip', 'IP', 'Ip'],
+            'network_connected': ['Connecté au réseau O/N', 'Connecte au reseau O/N', 'Connecte au réseau O/N', 'Connecté au reseau O/N'],
+            'rls_network_saved': ['Sauvegardé sur réseau RLS O/N', 'Sauvegarde sur reseau RLS O/N', 'Sauvegarde RLS O/N'],
+            'to_be_backed_up': ['A sauvegarder O/N', 'À sauvegarder O/N', 'ASauvegarder O/N'],
+            'supplier': ['Fournisseur matériel', 'Fournisseur materiel', 'Fournisseur']
+        }
+
         for index, row in enumerate(data_rows):
             try:
-                # Extraire les données de base
-                equipment_name = clean_string_field(row.get('Nom PC', ''))
-                location = clean_string_field(row.get('Salle', ''))
-                
+                equipment_name = first_value(row, header_map['name'])
+                location = first_value(row, header_map['location'])
+
                 if not equipment_name:
                     errors.append(f'Ligne {index + 2}: Nom PC manquant')
                     continue
-                
                 if not location:
                     errors.append(f'Ligne {index + 2}: Salle manquante')
                     continue
-                
+
                 # Déterminer le type d'équipement basé sur le nom
-                equipment_type = 'PC'  # Par défaut
+                equipment_type = 'PC'
                 name_lower = equipment_name.lower()
                 if 'srv' in name_lower or 'server' in name_lower:
                     equipment_type = 'Serveur'
@@ -280,37 +302,34 @@ def import_equipment():
                     equipment_type = 'Switch'
                 elif 'lab' in name_lower or 'machine' in name_lower:
                     equipment_type = 'Machine laboratoire'
-                
+
                 # Vérifier si l'équipement existe déjà
                 existing_equipment = Equipment.query.filter_by(name=equipment_name).first()
                 if existing_equipment:
                     errors.append(f'Ligne {index + 2}: Équipement {equipment_name} existe déjà')
                     continue
-                
-                # Créer l'équipement avec tous les nouveaux champs
+
                 equipment = Equipment(
                     name=equipment_name,
                     equipment_type=equipment_type,
                     location=location,
-                    description_alias=clean_string_field(row.get('Description  (Alias)', '')),
-                    brand=clean_string_field(row.get('Marque', '')),
-                    model_number=clean_string_field(row.get('N° modèle', '')),
-                    os_name=clean_string_field(row.get('Système d\'exploitation PC', '')),
-                    ip_address=clean_string_field(row.get('Adresse IP', '')),
-                    network_connected=convert_boolean_field(row.get('Connecté au réseau O/N')),
-                    rls_network_saved=convert_boolean_field(row.get('Sauvegardé sur réseau RLS O/N')),
-                    to_be_backed_up=convert_boolean_field(row.get('A sauvegarder O/N')),
-                    supplier=clean_string_field(row.get('Fournisseur matériel', '')),
+                    description_alias=first_value(row, header_map['description_alias']),
+                    brand=first_value(row, header_map['brand']),
+                    model_number=first_value(row, header_map['model_number']),
+                    os_name=first_value(row, header_map['os_name']),
+                    ip_address=first_value(row, header_map['ip_address']),
+                    network_connected=convert_boolean_field(first_value(row, header_map['network_connected'])),
+                    rls_network_saved=convert_boolean_field(first_value(row, header_map['rls_network_saved'])),
+                    to_be_backed_up=convert_boolean_field(first_value(row, header_map['to_be_backed_up'])),
+                    supplier=first_value(row, header_map['supplier']),
                     status='Active'
                 )
-                
+
                 db.session.add(equipment)
-                db.session.flush()  # Pour obtenir l'ID
-                
-                # Ajouter l'application si présente
+                db.session.flush()
+
                 app_name = clean_string_field(row.get('Application', ''))
                 app_version = clean_string_field(row.get('Version', ''))
-                
                 if app_name:
                     application = Application(
                         name=app_name,
@@ -318,9 +337,9 @@ def import_equipment():
                         equipment_id=equipment.id
                     )
                     db.session.add(application)
-                
+
                 imported_count += 1
-                
+
             except Exception as e:
                 errors.append(f'Ligne {index + 2}: {str(e)}')
                 continue
@@ -413,4 +432,3 @@ def export_template():
         
     except Exception as e:
         return jsonify({'error': f'Erreur lors de la génération du modèle: {str(e)}'}), 500
-
