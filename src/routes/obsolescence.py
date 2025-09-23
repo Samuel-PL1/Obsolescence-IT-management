@@ -257,3 +257,80 @@ def save_obsolescence_info(product_name, product_type, obsolescence_data):
         print(f"Erreur lors de la sauvegarde: {e}")
         raise e
 
+
+
+
+@obsolescence_bp.route("/obsolescence/alerts", methods=["GET"])
+def get_obsolescence_alerts():
+    """Récupère les alertes d'obsolescence"""
+    try:
+        limit = request.args.get("limit", 5, type=int)
+
+        # Alertes pour les OS obsolètes
+        obsolete_os_alerts = (
+            db.session.query(
+                Equipment.name.label("equipment_name"),
+                ObsolescenceInfo.product_name.label("product_name"),
+                ObsolescenceInfo.eol_date.label("eol_date"),
+            )
+            .join(
+                ObsolescenceInfo,
+                db.and_(
+                    Equipment.os_name == ObsolescenceInfo.product_name,
+                    ObsolescenceInfo.product_type == "os",
+                    ObsolescenceInfo.is_obsolete == True,
+                ),
+            )
+            .all()
+        )
+
+        # Alertes pour les applications obsolètes
+        obsolete_apps_alerts = (
+            db.session.query(
+                Equipment.name.label("equipment_name"),
+                ObsolescenceInfo.product_name.label("product_name"),
+                ObsolescenceInfo.eol_date.label("eol_date"),
+            )
+            .join(Application, Equipment.id == Application.equipment_id)
+            .join(
+                ObsolescenceInfo,
+                db.and_(
+                    Application.name == ObsolescenceInfo.product_name,
+                    ObsolescenceInfo.product_type == "application",
+                    ObsolescenceInfo.is_obsolete == True,
+                ),
+            )
+            .all()
+        )
+
+        alerts = []
+        for alert in obsolete_os_alerts:
+            alerts.append(
+                {
+                    "id": f"os-{alert.equipment_name}-{alert.product_name}",
+                    "type": "critical",
+                    "message": f"{alert.product_name} est obsolète sur {alert.equipment_name}",
+                    "time": f"Date EOL: {alert.eol_date.strftime('%d/%m/%Y') if alert.eol_date else 'N/A'}",
+                    "equipment": alert.equipment_name,
+                }
+            )
+
+        for alert in obsolete_apps_alerts:
+            alerts.append(
+                {
+                    "id": f"app-{alert.equipment_name}-{alert.product_name}",
+                    "type": "warning",
+                    "message": f"L'application {alert.product_name} est obsolète sur {alert.equipment_name}",
+                    "time": f"Date EOL: {alert.eol_date.strftime('%d/%m/%Y') if alert.eol_date else 'N/A'}",
+                    "equipment": alert.equipment_name,
+                }
+            )
+
+        # Trier les alertes par date EOL (les plus anciennes en premier)
+        alerts.sort(key=lambda x: x["time"], reverse=True)
+
+        return jsonify(alerts[:limit]), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
