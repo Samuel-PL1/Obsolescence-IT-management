@@ -238,31 +238,10 @@ def import_equipment():
             return jsonify({'error': f'Erreur lors de la lecture du fichier Excel: {str(e)}'}), 400
         
         # Normaliser les noms de colonnes
-        columns = [col.strip() for col in columns]
-        
-        # Vérifier les colonnes requises
-        required_columns = ['Salle', 'Nom PC']
-        missing_columns = [col for col in required_columns if col not in columns]
-        if missing_columns:
-            return jsonify({
-                'error': f'Colonnes manquantes: {", ".join(missing_columns)}',
-                'available_columns': columns
-            }), 400
-        
-        imported_count = 0
-        errors = []
-        
+        columns = [str(col).strip() if col is not None else '' for col in columns]
+
         # Importer les fonctions utilitaires
         from src.excel_reader import is_empty_value, convert_boolean_field, clean_string_field
-        
-        # Préparer un utilitaire pour récupérer des valeurs avec variantes d'en-têtes
-        def first_value(row_obj, keys):
-            for k in keys:
-                v = row_obj.get(k, '')
-                v = clean_string_field(v)
-                if v is not None and v != '':
-                    return v
-            return None
 
         # Variantes d'en-têtes possibles (accents, apostrophes, espaces)
         header_map = {
@@ -278,6 +257,30 @@ def import_equipment():
             'to_be_backed_up': ['A sauvegarder O/N', 'À sauvegarder O/N', 'ASauvegarder O/N'],
             'supplier': ['Fournisseur matériel', 'Fournisseur materiel', 'Fournisseur']
         }
+
+        # Vérifier la présence des colonnes obligatoires via synonymes
+        def has_any(keys, cols):
+            ks = set(keys)
+            return any(c in ks for c in cols)
+        has_name = has_any(columns, header_map['name'])
+        has_location = has_any(columns, header_map['location'])
+        if not (has_name and has_location):
+            return jsonify({
+                'error': "Colonnes d'en-têtes introuvables. Assurez-vous que le fichier contient les colonnes pour 'Nom PC' et 'Salle' (variantes acceptées).",
+                'available_columns': columns
+            }), 400
+
+        imported_count = 0
+        errors = []
+
+        # Préparer un utilitaire pour récupérer des valeurs avec variantes d'en-têtes
+        def first_value(row_obj, keys):
+            for k in keys:
+                v = row_obj.get(k, '')
+                v = clean_string_field(v)
+                if v is not None and v != '':
+                    return v
+            return None
 
         for index, row in enumerate(data_rows):
             try:
@@ -328,7 +331,7 @@ def import_equipment():
                 db.session.add(equipment)
                 db.session.flush()
 
-                app_name = clean_string_field(row.get('Application', ''))
+                app_name = clean_string_field(row.get('Application', '')) or clean_string_field(row.get('Logiciel', ''))
                 app_version = clean_string_field(row.get('Version', ''))
                 if app_name:
                     application = Application(
