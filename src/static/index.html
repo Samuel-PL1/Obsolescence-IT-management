@@ -21,6 +21,7 @@
           base = String(base);
           if (base.endsWith('/')) base = base.slice(0,-1);
           window.__API_BASE_URL = base;
+          try { window.localStorage.setItem('API_BASE_URL', base); } catch(e) {}
 
           var origFetch = window.fetch;
           if (typeof origFetch === 'function') {
