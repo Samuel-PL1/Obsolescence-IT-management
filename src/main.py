@@ -42,6 +42,7 @@ with app.app_context():
         from src.models.equipment import Equipment, Application
         from src.excel_reader import read_excel_file, clean_string_field, convert_boolean_field
 
+        print(f"Nombre d'équipements au démarrage: {Equipment.query.count()}")
         if Equipment.query.count() == 0:
             excel_candidates = [
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), 'inventaireIT.xlsx'),
