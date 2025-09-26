@@ -5,6 +5,30 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gestionnaire d'Obsolescence IT</title>
+    <script>
+      (function(){
+        try{
+          var origFetch = window.fetch.bind(window);
+          var targetBase = window.location.origin + '/api';
+          var hostsToRewrite = ['projects.builder.my','fly.dev'];
+          window.fetch = function(input, init){
+            try{
+              var url = typeof input === 'string' ? input : input && input.url;
+              if(!url) return origFetch(input, init);
+              var u = new URL(url, window.location.origin);
+              var isAbsolute = /^https?:/i.test(u.protocol);
+              if(isAbsolute && hostsToRewrite.some(function(h){return u.host.indexOf(h) !== -1;})){
+                var path = u.pathname.replace(/^\/?api\/?/, '');
+                var rewritten = targetBase + '/' + path.replace(/^\//,'');
+                if(u.search) rewritten += u.search;
+                return origFetch(rewritten, init);
+              }
+            }catch(e){/* ignore and fall back */}
+            return origFetch(input, init);
+          };
+        }catch(e){/* noop */}
+      })();
+    </script>
     <script type="module" crossorigin src="/assets/index-xkNNNpI3.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-C94EEPIY.css">
   </head>
