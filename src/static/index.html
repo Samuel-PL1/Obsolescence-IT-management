@@ -17,11 +17,21 @@
               if(!url) return origFetch(input, init);
               var u = new URL(url, window.location.origin);
               var isAbsolute = /^https?:/i.test(u.protocol);
+              // Rewriter appels externes -> même origine /api
               if(isAbsolute && hostsToRewrite.some(function(h){return u.host.indexOf(h) !== -1;})){
                 var path = u.pathname.replace(/^\/?api\/?/, '');
                 var rewritten = targetBase + '/' + path.replace(/^\//,'');
                 if(u.search) rewritten += u.search;
                 return origFetch(rewritten, init);
+              }
+              // Forcer la pagination objet pour /api/equipment sans paramètres
+              var method = (init && init.method ? init.method : 'GET').toUpperCase();
+              if(u.pathname.replace(/\/$/,'') === '/api/equipment' && method === 'GET'){
+                if(!u.search || !/[?&](page|pageSize|limit|paginated)=/i.test(u.search)){
+                  var qs = (u.search ? u.search + '&' : '?') + 'paginated=true&page=1&pageSize=5000';
+                  var forced = u.origin + u.pathname + qs;
+                  return origFetch(forced, init);
+                }
               }
             }catch(e){/* ignore and fall back */}
             return origFetch(input, init);
