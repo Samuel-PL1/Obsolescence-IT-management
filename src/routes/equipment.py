@@ -7,6 +7,8 @@ equipment_bp = Blueprint('equipment', __name__)
 
 @equipment_bp.route('/equipment', methods=['GET'])
 @equipment_bp.route('/equipments', methods=['GET'])
+@equipment_bp.route('/equipment/list', methods=['GET'])
+@equipment_bp.route('/equipments/list', methods=['GET'])
 def get_all_equipment():
     """Récupère les équipements avec recherche, filtres et pagination facultatifs"""
     try:
