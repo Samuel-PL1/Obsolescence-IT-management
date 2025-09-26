@@ -71,12 +71,18 @@ def get_all_equipment():
             page = page or 1
             page_size = page_size or 20
             items = query.offset((page - 1) * page_size).limit(page_size).all()
-            return jsonify({
+            payload = {
                 'items': [eq.to_dict() for eq in items],
                 'total': total,
                 'page': page,
                 'pageSize': page_size
-            }), 200
+            }
+            # Alias pour compatibilité
+            payload['data'] = payload['items']
+            payload['results'] = payload['items']
+            payload['count'] = payload['total']
+            payload['totalCount'] = payload['total']
+            return jsonify(payload), 200
 
         # Sans pagination: renvoyer la liste brute
         equipment_list = query.all()
