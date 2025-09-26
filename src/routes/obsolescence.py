@@ -72,9 +72,42 @@ def update_all_obsolescence():
 
 @obsolescence_bp.route('/obsolescence/info', methods=['GET'])
 def get_obsolescence_info():
-    """Récupère toutes les informations d'obsolescence"""
+    """Récupère toutes les informations d'obsolescence; si vide, génère un aperçu à partir des équipements"""
     try:
         obsolescence_list = ObsolescenceInfo.query.all()
+        if len(obsolescence_list) == 0:
+            fallback = []
+            # OS distincts
+            os_list = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().all()
+            for (os_name,) in os_list:
+                if not os_name:
+                    continue
+                fallback.append({
+                    'id': None,
+                    'product_name': os_name,
+                    'product_type': 'os',
+                    'version': 'Unknown',
+                    'eol_date': None,
+                    'support_end_date': None,
+                    'is_obsolete': False,
+                    'last_updated': None
+                })
+            # Applications distinctes
+            app_list = db.session.query(Application.name).distinct().all()
+            for (app_name,) in app_list:
+                if not app_name:
+                    continue
+                fallback.append({
+                    'id': None,
+                    'product_name': app_name,
+                    'product_type': 'application',
+                    'version': 'Unknown',
+                    'eol_date': None,
+                    'support_end_date': None,
+                    'is_obsolete': False,
+                    'last_updated': None
+                })
+            return jsonify(fallback), 200
         return jsonify([info.to_dict() for info in obsolescence_list]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
