@@ -255,24 +255,32 @@ def get_equipment_stats():
             status_stats = status_stats.filter(Equipment.location == location_filter)
         status_stats = status_stats.group_by(Equipment.status).all()
         
-        # Statistiques par localisation (toujours toutes les localisations)
+        # Statistiques par localisation (toujours toutes les localisations, sans vides)
         location_stats = db.session.query(
             Equipment.location,
             db.func.count(Equipment.id).label('count')
-        ).group_by(Equipment.location).all()
-        
+        ).filter(
+            Equipment.location.isnot(None),
+            Equipment.location != ''
+        ).group_by(Equipment.location).order_by(db.func.count(Equipment.id).desc()).all()
+
         # Total des équipements (avec filtre)
         total_equipment = base_query.count()
         active_equipment = base_query.filter_by(status='Active').count()
         obsolete_equipment = base_query.filter_by(status='Obsolete').count()
-        
+
+        by_type_data = [{'type': t, 'count': c, 'name': t, 'value': c} for (t, c) in type_stats]
+        by_status_data = [{'status': s, 'count': c, 'name': s, 'value': c} for (s, c) in status_stats]
+        by_location_data = [{'location': loc, 'count': c, 'name': loc, 'value': c, 'label': loc} for (loc, c) in location_stats]
+
         return jsonify({
             'total_equipment': total_equipment,
             'active_equipment': active_equipment,
             'obsolete_equipment': obsolete_equipment,
-            'by_type': [{'type': stat[0], 'count': stat[1]} for stat in type_stats],
-            'by_status': [{'status': stat[0], 'count': stat[1]} for stat in status_stats],
-            'by_location': [{'location': stat[0], 'count': stat[1]} for stat in location_stats],
+            'by_type': by_type_data,
+            'by_status': by_status_data,
+            'by_location': by_location_data,
+            'by_location_chart': by_location_data,
             'applied_filter': location_filter
         }), 200
     except Exception as e:
