@@ -193,6 +193,15 @@ def get_obsolescence_stats():
         except Exception:
             alerts_count = 0
 
+        # Fallback: si rien de suivi, compter quand même les produits uniques à partir des équipements
+        if total_tracked == 0:
+            unique_os = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().count()
+            unique_apps = db.session.query(Application.name).distinct().count()
+            total_tracked = unique_os + unique_apps
+            obsolete_count = 0
+            obsolete_os = 0
+            obsolete_apps = 0
+
         result = {
             'total_tracked_products': total_tracked,
             'obsolete_products': obsolete_count,
