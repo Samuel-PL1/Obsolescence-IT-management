@@ -5,6 +5,51 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gestionnaire d'Obsolescence IT</title>
+    <script>
+      (function(){
+        try{
+          var origFetch = window.fetch.bind(window);
+          var targetBase = window.location.origin + '/api';
+          var hostsToRewrite = ['projects.builder.my','fly.dev'];
+          window.fetch = function(input, init){
+            try{
+              var url = typeof input === 'string' ? input : input && input.url;
+              if(!url) return origFetch(input, init);
+              var u = new URL(url, window.location.origin);
+              var isAbsolute = /^https?:/i.test(u.protocol);
+              // Rewriter appels externes -> même origine /api
+              if(isAbsolute && hostsToRewrite.some(function(h){return u.host.indexOf(h) !== -1;})){
+                var path = u.pathname.replace(/^\/?api\/?/, '');
+                var rewritten = targetBase + '/' + path.replace(/^\//,'');
+                if(u.search) rewritten += u.search;
+                return origFetch(rewritten, init);
+              }
+              // Réécrire les appels same-origin vers /equipment* -> /api/equipment*
+              var method = (init && init.method ? init.method : 'GET').toUpperCase();
+              var pathNoSlash = u.pathname.replace(/\/$/,'');
+              if(/^\/equip(m|ment)/i.test(pathNoSlash) && !/^\/api\//i.test(pathNoSlash)){
+                var apiPath = '/api' + pathNoSlash;
+                var rewrittenLocal = u.origin + apiPath + (u.search || '');
+                // Forcer pagination si besoin
+                if(apiPath === '/api/equipment' && method === 'GET' && (!u.search || !/[?&](page|pageSize|limit|paginated)=/i.test(u.search))){
+                  rewrittenLocal += (u.search ? '&' : '?') + 'paginated=true&page=1&pageSize=5000';
+                }
+                return origFetch(rewrittenLocal, init);
+              }
+              // Forcer la pagination objet pour /api/equipment sans paramètres
+              if(pathNoSlash === '/api/equipment' && method === 'GET'){
+                if(!u.search || !/[?&](page|pageSize|limit|paginated)=/i.test(u.search)){
+                  var qs = (u.search ? u.search + '&' : '?') + 'paginated=true&page=1&pageSize=5000';
+                  var forced = u.origin + u.pathname + qs;
+                  return origFetch(forced, init);
+                }
+              }
+            }catch(e){/* ignore and fall back */}
+            return origFetch(input, init);
+          };
+        }catch(e){/* noop */}
+      })();
+    </script>
     <script type="module" crossorigin src="/assets/index-xkNNNpI3.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-C94EEPIY.css">
   </head>

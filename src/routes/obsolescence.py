@@ -72,9 +72,42 @@ def update_all_obsolescence():
 
 @obsolescence_bp.route('/obsolescence/info', methods=['GET'])
 def get_obsolescence_info():
-    """Récupère toutes les informations d'obsolescence"""
+    """Récupère toutes les informations d'obsolescence; si vide, génère un aperçu à partir des équipements"""
     try:
         obsolescence_list = ObsolescenceInfo.query.all()
+        if len(obsolescence_list) == 0:
+            fallback = []
+            # OS distincts
+            os_list = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().all()
+            for (os_name,) in os_list:
+                if not os_name:
+                    continue
+                fallback.append({
+                    'id': None,
+                    'product_name': os_name,
+                    'product_type': 'os',
+                    'version': 'Unknown',
+                    'eol_date': None,
+                    'support_end_date': None,
+                    'is_obsolete': False,
+                    'last_updated': None
+                })
+            # Applications distinctes
+            app_list = db.session.query(Application.name).distinct().all()
+            for (app_name,) in app_list:
+                if not app_name:
+                    continue
+                fallback.append({
+                    'id': None,
+                    'product_name': app_name,
+                    'product_type': 'application',
+                    'version': 'Unknown',
+                    'eol_date': None,
+                    'support_end_date': None,
+                    'is_obsolete': False,
+                    'last_updated': None
+                })
+            return jsonify(fallback), 200
         return jsonify([info.to_dict() for info in obsolescence_list]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -83,12 +116,27 @@ def get_obsolescence_info():
 def get_obsolescence_stats():
     """Récupère les statistiques d'obsolescence"""
     try:
+        # Auto-peuplement si aucune donnée suivie
+        total_tracked = ObsolescenceInfo.query.count()
+        if total_tracked == 0:
+            try:
+                os_list = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().all()
+                app_list = db.session.query(Application.name).distinct().all()
+                for (os_name,) in os_list:
+                    data = fetch_obsolescence_data(os_name) if os_name else None
+                    if data:
+                        save_obsolescence_info(os_name, 'os', data)
+                for (app_name,) in app_list:
+                    data = fetch_obsolescence_data(app_name) if app_name else None
+                    if data:
+                        save_obsolescence_info(app_name, 'application', data)
+                total_tracked = ObsolescenceInfo.query.count()
+            except Exception:
+                pass
+
         # Nombre total de produits obsolètes
         obsolete_count = ObsolescenceInfo.query.filter_by(is_obsolete=True).count()
-        
-        # Nombre total de produits suivis
-        total_tracked = ObsolescenceInfo.query.count()
-        
+
         # Équipements avec OS obsolète
         obsolete_os = db.session.query(Equipment).join(
             ObsolescenceInfo,
@@ -98,7 +146,7 @@ def get_obsolescence_stats():
                 ObsolescenceInfo.is_obsolete == True
             )
         ).count()
-        
+
         # Équipements avec applications obsolètes
         obsolete_apps = db.session.query(Equipment).join(
             Application,
@@ -111,15 +159,64 @@ def get_obsolescence_stats():
                 ObsolescenceInfo.is_obsolete == True
             )
         ).distinct().count()
-        
-        return jsonify({
+
+        # Compter les alertes critiques existantes
+        alerts_count = 0
+        try:
+            obsolete_os_alerts = (
+                db.session.query(Equipment.id)
+                .join(
+                    ObsolescenceInfo,
+                    db.and_(
+                        Equipment.os_name == ObsolescenceInfo.product_name,
+                        ObsolescenceInfo.product_type == 'os',
+                        ObsolescenceInfo.is_obsolete == True,
+                    ),
+                )
+                .count()
+            )
+            obsolete_apps_alerts = (
+                db.session.query(Equipment.id)
+                .join(Application, Equipment.id == Application.equipment_id)
+                .join(
+                    ObsolescenceInfo,
+                    db.and_(
+                        Application.name == ObsolescenceInfo.product_name,
+                        ObsolescenceInfo.product_type == 'application',
+                        ObsolescenceInfo.is_obsolete == True,
+                    ),
+                )
+                .distinct()
+                .count()
+            )
+            alerts_count = obsolete_os_alerts + obsolete_apps_alerts
+        except Exception:
+            alerts_count = 0
+
+        # Fallback: si rien de suivi, compter quand même les produits uniques à partir des équipements
+        if total_tracked == 0:
+            unique_os = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().count()
+            unique_apps = db.session.query(Application.name).distinct().count()
+            total_tracked = unique_os + unique_apps
+            obsolete_count = 0
+            obsolete_os = 0
+            obsolete_apps = 0
+
+        result = {
             'total_tracked_products': total_tracked,
             'obsolete_products': obsolete_count,
             'equipment_with_obsolete_os': obsolete_os,
-            'equipment_with_obsolete_apps': obsolete_apps,
+            'equipment_with_obsolete_apps': equipment_with_obsolete_apps if (equipment_with_obsolete_apps := obsolete_apps) or True else obsolete_apps,
             'obsolescence_rate': round((obsolete_count / total_tracked * 100) if total_tracked > 0 else 0, 2)
-        }), 200
-    
+        }
+        # Alias communs pour la compatibilité UI
+        result['trackedProducts'] = result['total_tracked_products']
+        result['obsoleteProducts'] = result['obsolete_products']
+        result['criticalAlerts'] = alerts_count
+        result['activeProducts'] = result['total_tracked_products'] - result['obsolete_products']
+
+        return jsonify(result), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -333,4 +430,3 @@ def get_obsolescence_alerts():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-

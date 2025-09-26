@@ -7,42 +7,54 @@ from io import BytesIO
 
 def read_excel_file(file_content):
     """
-    Lit un fichier Excel et retourne les données sous forme de dictionnaire
-    
-    Args:
-        file_content: Contenu du fichier Excel en bytes
-        
-    Returns:
-        dict: Données avec colonnes et lignes
+    Lit un fichier Excel et retourne les données sous forme de dictionnaire.
+    Détection automatique de la ligne d'en-têtes (si ce n'est pas la première ligne).
     """
     try:
-        # Charger le workbook depuis les bytes
-        workbook = openpyxl.load_workbook(BytesIO(file_content))
-        
-        # Prendre la première feuille
+        workbook = openpyxl.load_workbook(BytesIO(file_content), data_only=True)
         worksheet = workbook.active
-        
-        # Lire les en-têtes (première ligne)
+
+        # Candidats d'en-têtes attendus
+        header_candidates = {
+            'Nom PC', 'Nom Pc', 'Nom pc', 'Nom ordinateur', 'Nom machine',
+            'Salle', 'Localisation', 'Emplacement', 'Lieu'
+        }
+
+        # Trouver la meilleure ligne d'en-têtes dans les 30 premières lignes
+        best_row_idx = 1
+        best_score = -1
+        max_scan = min(30, worksheet.max_row)
+        for r in range(1, max_scan + 1):
+            vals = [str(c) if c is not None else '' for c in [cell.value for cell in worksheet[r]]]
+            normalized = [v.strip() for v in vals]
+            score = sum(1 for v in normalized if v in header_candidates)
+            if score > best_score and any(v for v in normalized):
+                best_score = score
+                best_row_idx = r
+
+        # Lire les en-têtes depuis la ligne détectée
         headers = []
-        for cell in worksheet[1]:
-            headers.append(cell.value if cell.value is not None else "")
-        
-        # Lire les données
+        for cell in worksheet[best_row_idx]:
+            headers.append(cell.value if cell.value is not None else '')
+
+        # Lire les données à partir de la ligne suivante
         data = []
-        for row in worksheet.iter_rows(min_row=2, values_only=True):
+        for row in worksheet.iter_rows(min_row=best_row_idx + 1, values_only=True):
+            # Ignorer les lignes complètement vides
+            if all(v is None or str(v).strip() == '' for v in row):
+                continue
             row_data = {}
             for i, value in enumerate(row):
                 if i < len(headers):
-                    # Convertir None en chaîne vide
-                    row_data[headers[i]] = value if value is not None else ""
+                    row_data[headers[i]] = value if value is not None else ''
             data.append(row_data)
-        
+
         return {
             'columns': headers,
             'data': data,
             'total_rows': len(data)
         }
-        
+
     except Exception as e:
         raise Exception(f"Erreur lors de la lecture du fichier Excel: {str(e)}")
 

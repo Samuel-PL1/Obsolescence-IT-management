@@ -6,15 +6,92 @@ from datetime import datetime
 equipment_bp = Blueprint('equipment', __name__)
 
 @equipment_bp.route('/equipment', methods=['GET'])
+@equipment_bp.route('/equipments', methods=['GET'])
+@equipment_bp.route('/equipment/list', methods=['GET'])
+@equipment_bp.route('/equipments/list', methods=['GET'])
 def get_all_equipment():
-    """Récupère tous les équipements"""
+    """Récupère les équipements avec recherche, filtres et pagination facultatifs"""
     try:
-        equipment_list = Equipment.query.all()
+        # Paramètres
+        search = request.args.get('search') or request.args.get('q') or ''
+        type_filter = request.args.get('type') or request.args.get('equipment_type') or ''
+        status_filter = request.args.get('status') or ''
+        location_filter = request.args.get('location') or ''
+        paginated = request.args.get('paginated', '').lower() in ['1', 'true', 'yes']
+        page = request.args.get('page', type=int)
+        page_size = request.args.get('pageSize', type=int) or request.args.get('limit', type=int)
+
+        # Normalisation des valeurs front -> base
+        status_map = {
+            'actif': 'Active',
+            'active': 'Active',
+            'obsolète': 'Obsolete',
+            'obsolete': 'Obsolete',
+            'en stock': 'In Stock',
+            'en_stock': 'In Stock',
+            'stock': 'In Stock'
+        }
+        if status_filter:
+            key = status_filter.strip().lower()
+            if key in status_map:
+                status_filter = status_map[key]
+            if key in ['tous', 'toutes', 'tous les statuts', 'toutes les statuts', 'all']:
+                status_filter = ''
+
+        query = Equipment.query
+
+        # Filtres
+        if location_filter and location_filter not in ['all', 'toutes', 'toutes les localisations']:
+            query = query.filter(Equipment.location == location_filter)
+        if type_filter and type_filter not in ['all', 'tous', 'tous les types']:
+            query = query.filter(Equipment.equipment_type == type_filter)
+        if status_filter and status_filter.lower() != 'all':
+            query = query.filter(Equipment.status == status_filter)
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Equipment.name.ilike(like),
+                    Equipment.location.ilike(like),
+                    Equipment.ip_address.ilike(like),
+                    Equipment.os_name.ilike(like),
+                    Equipment.brand.ilike(like),
+                    Equipment.model_number.ilike(like)
+                )
+            )
+
+        # Tri (récents d'abord)
+        query = query.order_by(Equipment.created_at.desc())
+
+        total = query.count()
+        print(f"[API] GET /equipment -> total={total} search='{search}' type='{type_filter}' status='{status_filter}' location='{location_filter}'")
+
+        # Pagination
+        if paginated or (page is not None and page_size):
+            page = page or 1
+            page_size = page_size or 20
+            items = query.offset((page - 1) * page_size).limit(page_size).all()
+            payload = {
+                'items': [eq.to_dict() for eq in items],
+                'total': total,
+                'page': page,
+                'pageSize': page_size
+            }
+            # Alias pour compatibilité
+            payload['data'] = payload['items']
+            payload['results'] = payload['items']
+            payload['count'] = payload['total']
+            payload['totalCount'] = payload['total']
+            return jsonify(payload), 200
+
+        # Sans pagination: renvoyer la liste brute
+        equipment_list = query.all()
         return jsonify([eq.to_dict() for eq in equipment_list]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/<int:equipment_id>', methods=['GET'])
+@equipment_bp.route('/equipments/<int:equipment_id>', methods=['GET'])
 def get_equipment(equipment_id):
     """Récupère un équipement spécifique"""
     try:
@@ -24,6 +101,7 @@ def get_equipment(equipment_id):
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment', methods=['POST'])
+@equipment_bp.route('/equipments', methods=['POST'])
 def create_equipment():
     """Crée un nouvel équipement"""
     try:
@@ -79,6 +157,7 @@ def create_equipment():
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/<int:equipment_id>', methods=['PUT'])
+@equipment_bp.route('/equipments/<int:equipment_id>', methods=['PUT'])
 def update_equipment(equipment_id):
     """Met à jour un équipement"""
     try:
@@ -132,6 +211,7 @@ def update_equipment(equipment_id):
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/<int:equipment_id>', methods=['DELETE'])
+@equipment_bp.route('/equipments/<int:equipment_id>', methods=['DELETE'])
 def delete_equipment(equipment_id):
     """Supprime un équipement"""
     try:
@@ -145,6 +225,7 @@ def delete_equipment(equipment_id):
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/stats', methods=['GET'])
+@equipment_bp.route('/equipment/summary', methods=['GET'])
 def get_equipment_stats():
     """Récupère les statistiques des équipements avec filtrage optionnel par localisation"""
     try:
@@ -174,30 +255,56 @@ def get_equipment_stats():
             status_stats = status_stats.filter(Equipment.location == location_filter)
         status_stats = status_stats.group_by(Equipment.status).all()
         
-        # Statistiques par localisation (toujours toutes les localisations)
+        # Statistiques par localisation (toujours toutes les localisations, sans vides)
         location_stats = db.session.query(
             Equipment.location,
             db.func.count(Equipment.id).label('count')
-        ).group_by(Equipment.location).all()
-        
+        ).filter(
+            Equipment.location.isnot(None),
+            Equipment.location != ''
+        ).group_by(Equipment.location).order_by(db.func.count(Equipment.id).desc()).all()
+
         # Total des équipements (avec filtre)
         total_equipment = base_query.count()
         active_equipment = base_query.filter_by(status='Active').count()
         obsolete_equipment = base_query.filter_by(status='Obsolete').count()
-        
+
+        by_type_data = [{'type': t, 'count': c, 'name': t, 'value': c} for (t, c) in type_stats]
+        by_status_data = [{'status': s, 'count': c, 'name': s, 'value': c} for (s, c) in status_stats]
+        by_location_data = [{'location': loc, 'count': c, 'name': loc, 'value': c, 'label': loc} for (loc, c) in location_stats]
+
+        # Variante "bar chart" (Top 10 + Autres) + catégories/séries prêtes à consommer
+        sorted_loc = sorted(by_location_data, key=lambda x: x['count'], reverse=True)
+        top = sorted_loc[:10]
+        others_sum = sum(item['count'] for item in sorted_loc[10:])
+        if others_sum > 0:
+            top.append({'location': 'Autres', 'count': others_sum, 'name': 'Autres', 'value': others_sum, 'label': 'Autres'})
+        categories = [item['location'] for item in top]
+        series = [item['count'] for item in top]
+        # Pourcentages utiles au donut
+        total_for_pct = sum(item['count'] for item in by_location_data) or 1
+        by_location_pct = [
+            {**item, 'percent': round(item['count'] * 100.0 / total_for_pct, 2)} for item in by_location_data
+        ]
+
         return jsonify({
             'total_equipment': total_equipment,
             'active_equipment': active_equipment,
             'obsolete_equipment': obsolete_equipment,
-            'by_type': [{'type': stat[0], 'count': stat[1]} for stat in type_stats],
-            'by_status': [{'status': stat[0], 'count': stat[1]} for stat in status_stats],
-            'by_location': [{'location': stat[0], 'count': stat[1]} for stat in location_stats],
+            'by_type': by_type_data,
+            'by_status': by_status_data,
+            'by_location': by_location_data,
+            'by_location_chart': by_location_data,
+            'by_location_top10': top,
+            'by_location_bar': { 'categories': categories, 'series': series },
+            'by_location_percent': by_location_pct,
             'applied_filter': location_filter
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/locations', methods=['GET'])
+@equipment_bp.route('/equipment-filters/locations', methods=['GET'])
 def get_locations():
     """Récupère toutes les localisations uniques"""
     try:
@@ -205,7 +312,7 @@ def get_locations():
             Equipment.location.isnot(None),
             Equipment.location != ''
         ).all()
-        
+
         location_list = [loc[0] for loc in locations]
         return jsonify({'locations': sorted(location_list)}), 200
     except Exception as e:
@@ -213,6 +320,7 @@ def get_locations():
 
 
 @equipment_bp.route('/equipment/import', methods=['POST'])
+@equipment_bp.route('/equipments/import', methods=['POST'])
 def import_equipment():
     """Importe des équipements depuis un fichier Excel"""
     try:
@@ -238,39 +346,64 @@ def import_equipment():
             return jsonify({'error': f'Erreur lors de la lecture du fichier Excel: {str(e)}'}), 400
         
         # Normaliser les noms de colonnes
-        columns = [col.strip() for col in columns]
-        
-        # Vérifier les colonnes requises
-        required_columns = ['Salle', 'Nom PC']
-        missing_columns = [col for col in required_columns if col not in columns]
-        if missing_columns:
-            return jsonify({
-                'error': f'Colonnes manquantes: {", ".join(missing_columns)}',
-                'available_columns': columns
-            }), 400
-        
-        imported_count = 0
-        errors = []
-        
+        columns = [str(col).strip() if col is not None else '' for col in columns]
+
         # Importer les fonctions utilitaires
         from src.excel_reader import is_empty_value, convert_boolean_field, clean_string_field
-        
+
+        # Variantes d'en-têtes possibles (accents, apostrophes, espaces)
+        header_map = {
+            'name': ['Nom PC', 'Nom Pc', 'Nom pc', 'Nom ordinateur', 'Nom machine'],
+            'location': ['Salle', 'Localisation', 'Emplacement', 'Lieu'],
+            'description_alias': ['Description  (Alias)', 'Description (Alias)', 'Alias', 'Description'],
+            'brand': ['Marque', 'Fabricant'],
+            'model_number': ['N° modèle', 'No mod��le', 'N° modele', 'No modele', 'Modèle', 'Modele', 'Référence modèle', 'Reference modele'],
+            'os_name': ["Système d'exploitation PC", 'Système d’exploitation PC', 'Systeme dexploitation PC', 'OS', 'Système', 'Systeme'],
+            'ip_address': ['Adresse IP', 'Adresse Ip', 'IP', 'Ip'],
+            'network_connected': ['Connecté au réseau O/N', 'Connecte au reseau O/N', 'Connecte au réseau O/N', 'Connecté au reseau O/N'],
+            'rls_network_saved': ['Sauvegardé sur réseau RLS O/N', 'Sauvegarde sur reseau RLS O/N', 'Sauvegarde RLS O/N'],
+            'to_be_backed_up': ['A sauvegarder O/N', 'À sauvegarder O/N', 'ASauvegarder O/N'],
+            'supplier': ['Fournisseur matériel', 'Fournisseur materiel', 'Fournisseur']
+        }
+
+        # Vérifier la présence des colonnes obligatoires via synonymes
+        def has_any(keys, cols):
+            ks = set(keys)
+            return any(c in ks for c in cols)
+        has_name = has_any(columns, header_map['name'])
+        has_location = has_any(columns, header_map['location'])
+        if not (has_name and has_location):
+            return jsonify({
+                'error': "Colonnes d'en-têtes introuvables. Assurez-vous que le fichier contient les colonnes pour 'Nom PC' et 'Salle' (variantes acceptées).",
+                'available_columns': columns
+            }), 400
+
+        imported_count = 0
+        errors = []
+
+        # Préparer un utilitaire pour récupérer des valeurs avec variantes d'en-têtes
+        def first_value(row_obj, keys):
+            for k in keys:
+                v = row_obj.get(k, '')
+                v = clean_string_field(v)
+                if v is not None and v != '':
+                    return v
+            return None
+
         for index, row in enumerate(data_rows):
             try:
-                # Extraire les données de base
-                equipment_name = clean_string_field(row.get('Nom PC', ''))
-                location = clean_string_field(row.get('Salle', ''))
-                
+                equipment_name = first_value(row, header_map['name'])
+                location = first_value(row, header_map['location'])
+
                 if not equipment_name:
                     errors.append(f'Ligne {index + 2}: Nom PC manquant')
                     continue
-                
                 if not location:
                     errors.append(f'Ligne {index + 2}: Salle manquante')
                     continue
-                
+
                 # Déterminer le type d'équipement basé sur le nom
-                equipment_type = 'PC'  # Par défaut
+                equipment_type = 'PC'
                 name_lower = equipment_name.lower()
                 if 'srv' in name_lower or 'server' in name_lower:
                     equipment_type = 'Serveur'
@@ -280,37 +413,34 @@ def import_equipment():
                     equipment_type = 'Switch'
                 elif 'lab' in name_lower or 'machine' in name_lower:
                     equipment_type = 'Machine laboratoire'
-                
+
                 # Vérifier si l'équipement existe déjà
                 existing_equipment = Equipment.query.filter_by(name=equipment_name).first()
                 if existing_equipment:
                     errors.append(f'Ligne {index + 2}: Équipement {equipment_name} existe déjà')
                     continue
-                
-                # Créer l'équipement avec tous les nouveaux champs
+
                 equipment = Equipment(
                     name=equipment_name,
                     equipment_type=equipment_type,
                     location=location,
-                    description_alias=clean_string_field(row.get('Description  (Alias)', '')),
-                    brand=clean_string_field(row.get('Marque', '')),
-                    model_number=clean_string_field(row.get('N° modèle', '')),
-                    os_name=clean_string_field(row.get('Système d\'exploitation PC', '')),
-                    ip_address=clean_string_field(row.get('Adresse IP', '')),
-                    network_connected=convert_boolean_field(row.get('Connecté au réseau O/N')),
-                    rls_network_saved=convert_boolean_field(row.get('Sauvegardé sur réseau RLS O/N')),
-                    to_be_backed_up=convert_boolean_field(row.get('A sauvegarder O/N')),
-                    supplier=clean_string_field(row.get('Fournisseur matériel', '')),
+                    description_alias=first_value(row, header_map['description_alias']),
+                    brand=first_value(row, header_map['brand']),
+                    model_number=first_value(row, header_map['model_number']),
+                    os_name=first_value(row, header_map['os_name']),
+                    ip_address=first_value(row, header_map['ip_address']),
+                    network_connected=convert_boolean_field(first_value(row, header_map['network_connected'])),
+                    rls_network_saved=convert_boolean_field(first_value(row, header_map['rls_network_saved'])),
+                    to_be_backed_up=convert_boolean_field(first_value(row, header_map['to_be_backed_up'])),
+                    supplier=first_value(row, header_map['supplier']),
                     status='Active'
                 )
-                
+
                 db.session.add(equipment)
-                db.session.flush()  # Pour obtenir l'ID
-                
-                # Ajouter l'application si présente
-                app_name = clean_string_field(row.get('Application', ''))
+                db.session.flush()
+
+                app_name = clean_string_field(row.get('Application', '')) or clean_string_field(row.get('Logiciel', ''))
                 app_version = clean_string_field(row.get('Version', ''))
-                
                 if app_name:
                     application = Application(
                         name=app_name,
@@ -318,9 +448,9 @@ def import_equipment():
                         equipment_id=equipment.id
                     )
                     db.session.add(application)
-                
+
                 imported_count += 1
-                
+
             except Exception as e:
                 errors.append(f'Ligne {index + 2}: {str(e)}')
                 continue
@@ -344,6 +474,7 @@ def import_equipment():
         return jsonify({'error': f'Erreur lors de l\'import: {str(e)}'}), 500
 
 @equipment_bp.route('/equipment/export-template', methods=['GET'])
+@equipment_bp.route('/equipments/export-template', methods=['GET'])
 def export_template():
     """Exporte un modèle Excel pour l'import"""
     try:
@@ -413,4 +544,3 @@ def export_template():
         
     except Exception as e:
         return jsonify({'error': f'Erreur lors de la génération du modèle: {str(e)}'}), 500
-
