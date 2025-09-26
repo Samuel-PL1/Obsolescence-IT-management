@@ -83,12 +83,27 @@ def get_obsolescence_info():
 def get_obsolescence_stats():
     """Récupère les statistiques d'obsolescence"""
     try:
+        # Auto-peuplement si aucune donnée suivie
+        total_tracked = ObsolescenceInfo.query.count()
+        if total_tracked == 0:
+            try:
+                os_list = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().all()
+                app_list = db.session.query(Application.name).distinct().all()
+                for (os_name,) in os_list:
+                    data = fetch_obsolescence_data(os_name) if os_name else None
+                    if data:
+                        save_obsolescence_info(os_name, 'os', data)
+                for (app_name,) in app_list:
+                    data = fetch_obsolescence_data(app_name) if app_name else None
+                    if data:
+                        save_obsolescence_info(app_name, 'application', data)
+                total_tracked = ObsolescenceInfo.query.count()
+            except Exception:
+                pass
+
         # Nombre total de produits obsolètes
         obsolete_count = ObsolescenceInfo.query.filter_by(is_obsolete=True).count()
-        
-        # Nombre total de produits suivis
-        total_tracked = ObsolescenceInfo.query.count()
-        
+
         # Équipements avec OS obsolète
         obsolete_os = db.session.query(Equipment).join(
             ObsolescenceInfo,
@@ -98,7 +113,7 @@ def get_obsolescence_stats():
                 ObsolescenceInfo.is_obsolete == True
             )
         ).count()
-        
+
         # Équipements avec applications obsolètes
         obsolete_apps = db.session.query(Equipment).join(
             Application,
@@ -111,7 +126,7 @@ def get_obsolescence_stats():
                 ObsolescenceInfo.is_obsolete == True
             )
         ).distinct().count()
-        
+
         return jsonify({
             'total_tracked_products': total_tracked,
             'obsolete_products': obsolete_count,
@@ -119,7 +134,7 @@ def get_obsolescence_stats():
             'equipment_with_obsolete_apps': obsolete_apps,
             'obsolescence_rate': round((obsolete_count / total_tracked * 100) if total_tracked > 0 else 0, 2)
         }), 200
-    
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -333,4 +348,3 @@ def get_obsolescence_alerts():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
