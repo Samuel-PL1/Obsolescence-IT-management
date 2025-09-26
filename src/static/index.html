@@ -24,9 +24,20 @@
                 if(u.search) rewritten += u.search;
                 return origFetch(rewritten, init);
               }
-              // Forcer la pagination objet pour /api/equipment sans paramètres
+              // Réécrire les appels same-origin vers /equipment* -> /api/equipment*
               var method = (init && init.method ? init.method : 'GET').toUpperCase();
-              if(u.pathname.replace(/\/$/,'') === '/api/equipment' && method === 'GET'){
+              var pathNoSlash = u.pathname.replace(/\/$/,'');
+              if(/^\/equip(m|ment)/i.test(pathNoSlash) && !/^\/api\//i.test(pathNoSlash)){
+                var apiPath = '/api' + pathNoSlash;
+                var rewrittenLocal = u.origin + apiPath + (u.search || '');
+                // Forcer pagination si besoin
+                if(apiPath === '/api/equipment' && method === 'GET' && (!u.search || !/[?&](page|pageSize|limit|paginated)=/i.test(u.search))){
+                  rewrittenLocal += (u.search ? '&' : '?') + 'paginated=true&page=1&pageSize=5000';
+                }
+                return origFetch(rewrittenLocal, init);
+              }
+              // Forcer la pagination objet pour /api/equipment sans paramètres
+              if(pathNoSlash === '/api/equipment' && method === 'GET'){
                 if(!u.search || !/[?&](page|pageSize|limit|paginated)=/i.test(u.search)){
                   var qs = (u.search ? u.search + '&' : '?') + 'paginated=true&page=1&pageSize=5000';
                   var forced = u.origin + u.pathname + qs;
