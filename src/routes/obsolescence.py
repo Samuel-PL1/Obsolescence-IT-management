@@ -127,13 +127,53 @@ def get_obsolescence_stats():
             )
         ).distinct().count()
 
-        return jsonify({
+        # Compter les alertes critiques existantes
+        alerts_count = 0
+        try:
+            obsolete_os_alerts = (
+                db.session.query(Equipment.id)
+                .join(
+                    ObsolescenceInfo,
+                    db.and_(
+                        Equipment.os_name == ObsolescenceInfo.product_name,
+                        ObsolescenceInfo.product_type == 'os',
+                        ObsolescenceInfo.is_obsolete == True,
+                    ),
+                )
+                .count()
+            )
+            obsolete_apps_alerts = (
+                db.session.query(Equipment.id)
+                .join(Application, Equipment.id == Application.equipment_id)
+                .join(
+                    ObsolescenceInfo,
+                    db.and_(
+                        Application.name == ObsolescenceInfo.product_name,
+                        ObsolescenceInfo.product_type == 'application',
+                        ObsolescenceInfo.is_obsolete == True,
+                    ),
+                )
+                .distinct()
+                .count()
+            )
+            alerts_count = obsolete_os_alerts + obsolete_apps_alerts
+        except Exception:
+            alerts_count = 0
+
+        result = {
             'total_tracked_products': total_tracked,
             'obsolete_products': obsolete_count,
             'equipment_with_obsolete_os': obsolete_os,
-            'equipment_with_obsolete_apps': obsolete_apps,
+            'equipment_with_obsolete_apps': equipment_with_obsolete_apps if (equipment_with_obsolete_apps := obsolete_apps) or True else obsolete_apps,
             'obsolescence_rate': round((obsolete_count / total_tracked * 100) if total_tracked > 0 else 0, 2)
-        }), 200
+        }
+        # Alias communs pour la compatibilité UI
+        result['trackedProducts'] = result['total_tracked_products']
+        result['obsoleteProducts'] = result['obsolete_products']
+        result['criticalAlerts'] = alerts_count
+        result['activeProducts'] = result['total_tracked_products'] - result['obsolete_products']
+
+        return jsonify(result), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
