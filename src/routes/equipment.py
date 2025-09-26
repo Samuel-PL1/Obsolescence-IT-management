@@ -273,6 +273,20 @@ def get_equipment_stats():
         by_status_data = [{'status': s, 'count': c, 'name': s, 'value': c} for (s, c) in status_stats]
         by_location_data = [{'location': loc, 'count': c, 'name': loc, 'value': c, 'label': loc} for (loc, c) in location_stats]
 
+        # Variante "bar chart" (Top 10 + Autres) + catégories/séries prêtes à consommer
+        sorted_loc = sorted(by_location_data, key=lambda x: x['count'], reverse=True)
+        top = sorted_loc[:10]
+        others_sum = sum(item['count'] for item in sorted_loc[10:])
+        if others_sum > 0:
+            top.append({'location': 'Autres', 'count': others_sum, 'name': 'Autres', 'value': others_sum, 'label': 'Autres'})
+        categories = [item['location'] for item in top]
+        series = [item['count'] for item in top]
+        # Pourcentages utiles au donut
+        total_for_pct = sum(item['count'] for item in by_location_data) or 1
+        by_location_pct = [
+            {**item, 'percent': round(item['count'] * 100.0 / total_for_pct, 2)} for item in by_location_data
+        ]
+
         return jsonify({
             'total_equipment': total_equipment,
             'active_equipment': active_equipment,
@@ -281,6 +295,9 @@ def get_equipment_stats():
             'by_status': by_status_data,
             'by_location': by_location_data,
             'by_location_chart': by_location_data,
+            'by_location_top10': top,
+            'by_location_bar': { 'categories': categories, 'series': series },
+            'by_location_percent': by_location_pct,
             'applied_filter': location_filter
         }), 200
     except Exception as e:
@@ -340,7 +357,7 @@ def import_equipment():
             'location': ['Salle', 'Localisation', 'Emplacement', 'Lieu'],
             'description_alias': ['Description  (Alias)', 'Description (Alias)', 'Alias', 'Description'],
             'brand': ['Marque', 'Fabricant'],
-            'model_number': ['N° modèle', 'No modèle', 'N° modele', 'No modele', 'Modèle', 'Modele', 'Référence modèle', 'Reference modele'],
+            'model_number': ['N° modèle', 'No mod��le', 'N° modele', 'No modele', 'Modèle', 'Modele', 'Référence modèle', 'Reference modele'],
             'os_name': ["Système d'exploitation PC", 'Système d’exploitation PC', 'Systeme dexploitation PC', 'OS', 'Système', 'Systeme'],
             'ip_address': ['Adresse IP', 'Adresse Ip', 'IP', 'Ip'],
             'network_connected': ['Connecté au réseau O/N', 'Connecte au reseau O/N', 'Connecte au réseau O/N', 'Connecté au reseau O/N'],
