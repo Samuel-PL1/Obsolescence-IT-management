@@ -7,9 +7,59 @@ equipment_bp = Blueprint('equipment', __name__)
 
 @equipment_bp.route('/equipment', methods=['GET'])
 def get_all_equipment():
-    """Récupère tous les équipements"""
+    """Récupère les équipements avec recherche, filtres et pagination facultatifs"""
     try:
-        equipment_list = Equipment.query.all()
+        # Paramètres
+        search = request.args.get('search') or request.args.get('q') or ''
+        type_filter = request.args.get('type') or request.args.get('equipment_type') or ''
+        status_filter = request.args.get('status') or ''
+        location_filter = request.args.get('location') or ''
+        paginated = request.args.get('paginated', '').lower() in ['1', 'true', 'yes']
+        page = request.args.get('page', type=int)
+        page_size = request.args.get('pageSize', type=int) or request.args.get('limit', type=int)
+
+        query = Equipment.query
+
+        # Filtres
+        if location_filter and location_filter != 'all':
+            query = query.filter(Equipment.location == location_filter)
+        if type_filter and type_filter != 'all':
+            query = query.filter(Equipment.equipment_type == type_filter)
+        if status_filter and status_filter != 'all':
+            query = query.filter(Equipment.status == status_filter)
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Equipment.name.ilike(like),
+                    Equipment.location.ilike(like),
+                    Equipment.ip_address.ilike(like),
+                    Equipment.os_name.ilike(like),
+                    Equipment.brand.ilike(like),
+                    Equipment.model_number.ilike(like)
+                )
+            )
+
+        # Tri (récents d'abord)
+        query = query.order_by(Equipment.created_at.desc())
+
+        total = query.count()
+        print(f"[API] GET /equipment -> total={total} search='{search}' type='{type_filter}' status='{status_filter}' location='{location_filter}'")
+
+        # Pagination
+        if paginated or (page is not None and page_size):
+            page = page or 1
+            page_size = page_size or 20
+            items = query.offset((page - 1) * page_size).limit(page_size).all()
+            return jsonify({
+                'items': [eq.to_dict() for eq in items],
+                'total': total,
+                'page': page,
+                'pageSize': page_size
+            }), 200
+
+        # Sans pagination: renvoyer la liste brute
+        equipment_list = query.all()
         return jsonify([eq.to_dict() for eq in equipment_list]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
