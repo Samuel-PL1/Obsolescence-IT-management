@@ -19,14 +19,31 @@ def get_all_equipment():
         page = request.args.get('page', type=int)
         page_size = request.args.get('pageSize', type=int) or request.args.get('limit', type=int)
 
+        # Normalisation des valeurs front -> base
+        status_map = {
+            'actif': 'Active',
+            'active': 'Active',
+            'obsolète': 'Obsolete',
+            'obsolete': 'Obsolete',
+            'en stock': 'In Stock',
+            'en_stock': 'In Stock',
+            'stock': 'In Stock'
+        }
+        if status_filter:
+            key = status_filter.strip().lower()
+            if key in status_map:
+                status_filter = status_map[key]
+            if key in ['tous', 'toutes', 'tous les statuts', 'toutes les statuts', 'all']:
+                status_filter = ''
+
         query = Equipment.query
 
         # Filtres
-        if location_filter and location_filter != 'all':
+        if location_filter and location_filter not in ['all', 'toutes', 'toutes les localisations']:
             query = query.filter(Equipment.location == location_filter)
-        if type_filter and type_filter != 'all':
+        if type_filter and type_filter not in ['all', 'tous', 'tous les types']:
             query = query.filter(Equipment.equipment_type == type_filter)
-        if status_filter and status_filter != 'all':
+        if status_filter and status_filter.lower() != 'all':
             query = query.filter(Equipment.status == status_filter)
         if search:
             like = f"%{search}%"
