@@ -6,6 +6,7 @@ from datetime import datetime
 equipment_bp = Blueprint('equipment', __name__)
 
 @equipment_bp.route('/equipment', methods=['GET'])
+@equipment_bp.route('/equipments', methods=['GET'])
 def get_all_equipment():
     """Récupère les équipements avec recherche, filtres et pagination facultatifs"""
     try:
@@ -65,6 +66,7 @@ def get_all_equipment():
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/<int:equipment_id>', methods=['GET'])
+@equipment_bp.route('/equipments/<int:equipment_id>', methods=['GET'])
 def get_equipment(equipment_id):
     """Récupère un équipement spécifique"""
     try:
@@ -74,6 +76,7 @@ def get_equipment(equipment_id):
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment', methods=['POST'])
+@equipment_bp.route('/equipments', methods=['POST'])
 def create_equipment():
     """Crée un nouvel équipement"""
     try:
@@ -129,6 +132,7 @@ def create_equipment():
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/<int:equipment_id>', methods=['PUT'])
+@equipment_bp.route('/equipments/<int:equipment_id>', methods=['PUT'])
 def update_equipment(equipment_id):
     """Met à jour un équipement"""
     try:
@@ -182,6 +186,7 @@ def update_equipment(equipment_id):
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/<int:equipment_id>', methods=['DELETE'])
+@equipment_bp.route('/equipments/<int:equipment_id>', methods=['DELETE'])
 def delete_equipment(equipment_id):
     """Supprime un équipement"""
     try:
@@ -195,6 +200,7 @@ def delete_equipment(equipment_id):
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/stats', methods=['GET'])
+@equipment_bp.route('/equipment/summary', methods=['GET'])
 def get_equipment_stats():
     """Récupère les statistiques des équipements avec filtrage optionnel par localisation"""
     try:
@@ -248,6 +254,7 @@ def get_equipment_stats():
         return jsonify({'error': str(e)}), 500
 
 @equipment_bp.route('/equipment/locations', methods=['GET'])
+@equipment_bp.route('/equipment-filters/locations', methods=['GET'])
 def get_locations():
     """Récupère toutes les localisations uniques"""
     try:
@@ -255,7 +262,7 @@ def get_locations():
             Equipment.location.isnot(None),
             Equipment.location != ''
         ).all()
-        
+
         location_list = [loc[0] for loc in locations]
         return jsonify({'locations': sorted(location_list)}), 200
     except Exception as e:
@@ -263,6 +270,7 @@ def get_locations():
 
 
 @equipment_bp.route('/equipment/import', methods=['POST'])
+@equipment_bp.route('/equipments/import', methods=['POST'])
 def import_equipment():
     """Importe des équipements depuis un fichier Excel"""
     try:
@@ -416,6 +424,7 @@ def import_equipment():
         return jsonify({'error': f'Erreur lors de l\'import: {str(e)}'}), 500
 
 @equipment_bp.route('/equipment/export-template', methods=['GET'])
+@equipment_bp.route('/equipments/export-template', methods=['GET'])
 def export_template():
     """Exporte un modèle Excel pour l'import"""
     try:
