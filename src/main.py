@@ -106,6 +106,36 @@ with app.app_context():
                 print(f"Import automatique effectué depuis {os.path.basename(excel_path)}: {imported} équipements importés")
             else:
                 print("Aucun fichier d'inventaire trouvé pour l'import automatique")
+
+        # Peupler automatiquement les infos d'obsolescence si vide
+        try:
+            from src.models.equipment import ObsolescenceInfo
+            from src.routes.obsolescence import fetch_obsolescence_data, save_obsolescence_info
+
+            tracked = ObsolescenceInfo.query.count()
+            print(f"Produits d'obsolescence suivis au démarrage: {tracked}")
+            if tracked == 0:
+                os_list = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().all()
+                app_list = db.session.query(Application.name).distinct().all()
+                updated = 0
+                for (os_name,) in os_list:
+                    if not os_name:
+                        continue
+                    data = fetch_obsolescence_data(os_name)
+                    if data:
+                        save_obsolescence_info(os_name, 'os', data)
+                        updated += 1
+                for (app_name,) in app_list:
+                    if not app_name:
+                        continue
+                    data = fetch_obsolescence_data(app_name)
+                    if data:
+                        save_obsolescence_info(app_name, 'application', data)
+                        updated += 1
+                print(f"Obsolescence auto-mise à jour pour {updated} produits")
+        except Exception as e2:
+            db.session.rollback()
+            print(f"Erreur lors de la mise à jour d'obsolescence: {e2}")
     except Exception as e:
         db.session.rollback()
         print(f"Erreur lors de l'import automatique: {e}")
