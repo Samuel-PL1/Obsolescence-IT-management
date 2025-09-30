@@ -4,14 +4,14 @@
 
 Le Gestionnaire d'Obsolescence IT est une application web qui vous permet de gérer efficacement votre parc informatique et de suivre l'obsolescence de vos équipements, systèmes d'exploitation et applications.
 
-**Accès à l'application** : https://lnh8imcwwzew.manus.space
+**Accès à l'application** : https://g8h3ilc36nxo.manus.space
 
 ## Première Connexion
 
 ### Accès à l'Application
 
 1. Ouvrez votre navigateur web
-2. Accédez à l'URL : https://lnh8imcwwzew.manus.space
+2. Accédez à l'URL : https://g8h3ilc36nxo.manus.space
 3. L'application se charge automatiquement avec un compte de démonstration
 
 ### Interface Principale
