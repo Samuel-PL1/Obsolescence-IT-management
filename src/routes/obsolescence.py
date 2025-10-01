@@ -150,7 +150,7 @@ def fetch_obsolescence_data(product_name):
         normalized_name = normalize_product_name(product_name)
         
         # Appel à l'API endoflife.date
-        url = f"https://endoflife.date/api/v1/products/{normalized_name}"
+        url = f"https://endoflife.date/api/{normalized_name}.json"
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
