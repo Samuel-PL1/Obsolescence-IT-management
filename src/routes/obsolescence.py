@@ -37,28 +37,48 @@ def update_all_obsolescence():
     try:
         updated_count = 0
         errors = []
+        processed_products = set()  # Pour éviter les doublons
         
         # Récupérer tous les OS uniques
-        os_list = db.session.query(Equipment.os_name).filter(Equipment.os_name.isnot(None)).distinct().all()
+        os_list = db.session.query(Equipment.os_name).filter(
+            Equipment.os_name.isnot(None),
+            Equipment.os_name != '',
+            Equipment.os_name != '?'
+        ).distinct().all()
         
         for (os_name,) in os_list:
             try:
-                obsolescence_data = fetch_obsolescence_data(os_name.lower())
-                if obsolescence_data:
-                    save_obsolescence_info(os_name, 'os', obsolescence_data)
-                    updated_count += 1
+                normalized_name = normalize_product_name(os_name)
+                if normalized_name and normalized_name not in processed_products:
+                    processed_products.add(normalized_name)
+                    obsolescence_data = fetch_obsolescence_data(normalized_name)
+                    if obsolescence_data:
+                        save_obsolescence_info(os_name, 'os', obsolescence_data)
+                        updated_count += 1
+                        print(f"Mis à jour: {os_name} -> {normalized_name}")
             except Exception as e:
                 errors.append(f"Erreur pour {os_name}: {str(e)}")
         
-        # Récupérer toutes les applications uniques
-        app_list = db.session.query(Application.name).distinct().all()
+        # Récupérer toutes les applications uniques (seulement celles qui pourraient être dans l'API)
+        app_list = db.session.query(Application.name).filter(
+            Application.name.isnot(None),
+            Application.name != '',
+            Application.name != '?'
+        ).distinct().all()
+        
+        # Applications connues dans endoflife.date
+        known_apps = ['java', 'python', 'nodejs', 'php', 'mysql', 'postgresql', 'apache', 'nginx', 'docker', 'kubernetes']
         
         for (app_name,) in app_list:
             try:
-                obsolescence_data = fetch_obsolescence_data(app_name.lower())
-                if obsolescence_data:
-                    save_obsolescence_info(app_name, 'application', obsolescence_data)
-                    updated_count += 1
+                normalized_name = normalize_product_name(app_name)
+                if normalized_name and normalized_name in known_apps and normalized_name not in processed_products:
+                    processed_products.add(normalized_name)
+                    obsolescence_data = fetch_obsolescence_data(normalized_name)
+                    if obsolescence_data:
+                        save_obsolescence_info(app_name, 'application', obsolescence_data)
+                        updated_count += 1
+                        print(f"Mis à jour: {app_name} -> {normalized_name}")
             except Exception as e:
                 errors.append(f"Erreur pour {app_name}: {str(e)}")
         
@@ -185,11 +205,15 @@ def fetch_obsolescence_data(product_name):
 
 def normalize_product_name(product_name):
     """Normalise le nom du produit pour l'API endoflife.date"""
+    if not product_name or product_name.strip() == '?' or product_name.strip() == '':
+        return None
+        
     # Mapping des noms de produits courants
     name_mapping = {
         'windows': 'windows',
         'windows 10': 'windows',
         'windows 11': 'windows',
+        'windows 7': 'windows',
         'ubuntu': 'ubuntu',
         'debian': 'debian',
         'centos': 'centos',
@@ -211,7 +235,17 @@ def normalize_product_name(product_name):
     }
     
     normalized = product_name.lower().strip()
-    return name_mapping.get(normalized, normalized)
+    
+    # Extraire le nom principal pour Windows
+    if 'windows' in normalized:
+        return 'windows'
+    
+    # Recherche dans le mapping
+    for key, value in name_mapping.items():
+        if key in normalized:
+            return value
+    
+    return normalized
 
 def save_obsolescence_info(product_name, product_type, obsolescence_data):
     """Sauvegarde les informations d'obsolescence en base de données"""
