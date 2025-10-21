@@ -9,6 +9,7 @@ from src.models.user import db
 from src.routes.user import user_bp
 from src.routes.equipment import equipment_bp
 from src.routes.obsolescence import obsolescence_bp
+from src.routes.obsolescence_enhanced import obsolescence_bp as obsolescence_enhanced_bp
 from src.routes.reset import reset_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -20,6 +21,7 @@ CORS(app)
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(equipment_bp, url_prefix='/api')
 app.register_blueprint(obsolescence_bp, url_prefix='/api')
+app.register_blueprint(obsolescence_enhanced_bp)
 app.register_blueprint(reset_bp, url_prefix='/api')
 
 # uncomment if you need to use database
