@@ -4,7 +4,7 @@
 
 Le Gestionnaire d'Obsolescence IT est une application web complète développée pour gérer l'obsolescence d'un parc informatique. Elle permet le suivi des équipements, des systèmes d'exploitation et des applications, avec une visualisation des données via un tableau de bord interactif.
 
-**URL de l'application déployée** : https://g8h3ilc36nxo.manus.space
+**URL de l'application déployée** : https://e5h6i7cv3l9j.manus.space
 
 ## Architecture Technique
 
